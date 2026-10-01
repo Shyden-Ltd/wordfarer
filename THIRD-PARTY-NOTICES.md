@@ -161,12 +161,14 @@ text they ship follows the list, printed once with the packages it covers.
 - `@stdlib/utils-library-manifest` 0.2.4 (Apache-2.0)
 - `@stdlib/utils-native-class` 0.2.3 (Apache-2.0)
 - `@stdlib/utils-type-of` 0.2.3 (Apache-2.0)
+- `break_infinity.js` 2.2.0 (MIT)
 - `debug` 2.6.9 (MIT)
 - `es-errors` 1.3.0 (MIT)
 - `function-bind` 1.1.2 (MIT)
 - `hasown` 2.0.4 (MIT)
 - `is-core-module` 2.17.0 (MIT)
 - `ms` 2.0.0 (MIT)
+- `pad-end` 1.0.2 (MIT)
 - `path-parse` 1.0.7 (MIT)
 - `resolve` 1.22.12 (MIT)
 - `supports-preserve-symlinks-flag` 1.0.0 (MIT)
@@ -998,6 +1000,34 @@ is preserved.
 
 ### Text 7
 
+Covers: `break_infinity.js`.
+
+```text
+MIT License
+
+Copyright (c) 2019 Timothy Stiles
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Text 8
+
 Covers: `debug`.
 
 ```text
@@ -1021,7 +1051,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### Text 8
+### Text 9
 
 Covers: `es-errors`.
 
@@ -1049,7 +1079,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### Text 9
+### Text 10
 
 Covers: `function-bind`.
 
@@ -1075,7 +1105,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### Text 10
+### Text 11
 
 Covers: `hasown`.
 
@@ -1103,7 +1133,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### Text 11
+### Text 12
 
 Covers: `is-core-module`.
 
@@ -1130,7 +1160,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### Text 12
+### Text 13
 
 Covers: `ms`.
 
@@ -1158,7 +1188,35 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### Text 13
+### Text 14
+
+Covers: `pad-end`.
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2016 W.Y.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Text 15
 
 Covers: `path-parse`.
 
@@ -1186,7 +1244,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### Text 14
+### Text 16
 
 Covers: `resolve`.
 
@@ -1214,7 +1272,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### Text 15
+### Text 17
 
 Covers: `supports-preserve-symlinks-flag`.
 

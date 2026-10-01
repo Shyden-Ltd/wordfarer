@@ -4,3 +4,4 @@
  * runs in browsers, Electron, Capacitor and Workers and replays identically.
  */
 export { exp, expm1, ln, log10, log1p, pow } from './det-math';
+export { Num, type NumTuple } from './num';
