@@ -6,7 +6,7 @@
 ## State
 
 - **Repo:** `Shyden-Ltd/wordfarer`, public. Agent `gh`/`git` act as the `wordfarer-agent` App, which has no `secrets` permission (listing environment secrets is a 403; read their names in the GitHub UI).
-- **`develop`** = `0e33a8a` (re-read it): PR #41 (#39 PR A: `packages/lockdown`, the gated dev web Worker, dev Custom Domains, the password verify) merged as a merge commit.
+- **`develop`** = the merge of this handover, on top of `0e33a8a` (re-read it): PR #41 (#39 PR A: `packages/lockdown`, the gated dev web Worker, dev Custom Domains, the password verify) merged as a merge commit.
 - **#39 is In Progress, blocked on Shyden.** Deploy-dev run 36889267341 on `0e33a8a`: `test` and `deploy` passed; `verify` failed with `web: status 401 with the password, expected 200`. Every earlier check passed (401 + challenge without and with a wrong password, robots blocked). Measured since:
   - The live web version `dea2ac71` (100% of traffic) binds `DEV_PASSWORD` (secret_text) and has a `fetch` handler, so the secret reached the Worker.
   - Neither `basicAuthOk` nor `verify-dev.ts` trims or reshapes the password, so the Worker secret and the GitHub `dev` secret `DEV_BASIC_AUTH_PASSWORD` hold **different strings** (most likely a stray trailing newline or space in one).
@@ -23,6 +23,6 @@
 2. Ask Shyden (AskUserQuestion) for the login test: open `https://dev.wordfarer.shyden.co.uk` (phone on mobile data, or the laptop once the router's cache has expired), any username, the dev password.
    - **Opens:** the GitHub `dev` secret is the wrong copy. Shyden re-pastes `DEV_BASIC_AUTH_PASSWORD` (Settings, Environments, dev, pencil) with nothing after the last character.
    - **401:** the Worker secret is the wrong copy. Shyden re-runs `npx wrangler secret put DEV_PASSWORD --name wordfarer-web-dev` in **his own terminal**, typing or pasting at the prompt.
-3. Re-run the failed job: `gh run rerun 36889267341 --failed`. Wait in the background, then read every job and step by name, and confirm the `dev-verified` status on `0e33a8a`.
+3. Re-run the `verify` job of the **latest** deploy-dev run on `develop`'s head (`gh run list --branch develop --workflow deploy-dev.yml --json databaseId,headSha` and match the SHA yourself), not run 36889267341: merging this handover redeploys dev stamped with the newer commit, and the old run would check for `0e33a8a`. `gh run rerun <id> --failed`, wait in the background, then read every job and step by name and confirm the `dev-verified` status on that SHA.
 4. Then follow the #39 plan's "Finishing" from step 5: AC evidence on #39, PR B (cherry-pick `stage-t5` with trailers), the AC8 probe, AC9 Access retirement, this file, #39 to Done.
 5. #27: write the tests in `wordfarer-wt-27` against the prototype, then plan it the #26 way (stages, red against stubs, predicted mutations, review to zero, self-approve). Tooling to copy: `.superpowers/sdd/m2-39/`.
