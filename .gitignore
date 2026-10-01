@@ -16,6 +16,7 @@ test-results/
 
 # Session-local agent files (brainstorm mockups, SDD scratch)
 .superpowers/
+.remember/
 
 # OS
 .DS_Store
