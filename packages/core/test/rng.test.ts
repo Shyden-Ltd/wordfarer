@@ -133,10 +133,12 @@ describe('named sub-streams', () => {
   });
 
   it('are independent: drawing from one never changes another', () => {
+    let longest = 0;
     fc.assert(
       fc.property(
-        fc.array(fc.constantFrom(...NAMES), { maxLength: 60 }),
+        fc.array(fc.constantFrom(...NAMES), { maxLength: 60, size: 'max' }),
         (order) => {
+          longest = Math.max(longest, order.length);
           let streams = createStreams(7, NAMES);
           const seen: Record<string, number[]> = {
             recall: [],
@@ -163,6 +165,10 @@ describe('named sub-streams', () => {
         },
       ),
     );
+    // fast-check's default size never generates more than 10 elements
+    // (measured, #27), whatever maxLength says: the property must reach
+    // longer interleavings than that.
+    expect(longest).toBeGreaterThan(10);
   });
 
   it('refuse an unknown name, a duplicate and a name outside [a-z0-9-]', () => {
