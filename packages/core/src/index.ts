@@ -28,3 +28,15 @@ export {
   type RngStreams,
 } from './rng';
 export { BALANCE, type Balance, type Rank } from './balance';
+export type {
+  CardSet,
+  Cefr,
+  CourseData,
+  CultureCard,
+  Destination,
+  Encounter,
+  FestivalWindow,
+  GrammarNode,
+  LexiconItem,
+  Region,
+} from './course';
