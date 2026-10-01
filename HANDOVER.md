@@ -1,28 +1,22 @@
 # Handover: Wordfarer
 
-**Written:** 2026-10-01 16:23 UTC.
+**Written:** 2026-10-01 17:45 UTC.
 **Next session:** launch Claude from `~/Developer/Repos/wordfarer`. The session names itself "Wordfarer" by hook; type `/color green` once.
 
 ## State
 
 - **Repo:** `Shyden-Ltd/wordfarer`, public. Agent `gh`/`git` act as the `wordfarer-agent` App, which has no `secrets` permission (listing environment secrets is a 403; read their names in the GitHub UI).
-- **`develop`** = the merge of this handover, on top of `0e33a8a` (re-read it): PR #41 (#39 PR A: `packages/lockdown`, the gated dev web Worker, dev Custom Domains, the password verify) merged as a merge commit.
-- **#39 is In Progress, blocked on Shyden.** Deploy-dev run 36889267341 on `0e33a8a`: `test` and `deploy` passed; `verify` failed with `web: status 401 with the password, expected 200`. Every earlier check passed (401 + challenge without and with a wrong password, robots blocked). Measured since:
-  - The live web version `dea2ac71` (100% of traffic) binds `DEV_PASSWORD` (secret_text) and has a `fetch` handler, so the secret reached the Worker.
-  - Neither `basicAuthOk` nor `verify-dev.ts` trims or reshapes the password, so the Worker secret and the GitHub `dev` secret `DEV_BASIC_AUTH_PASSWORD` hold **different strings** (most likely a stray trailing newline or space in one).
-  - Shyden's browser got `NXDOMAIN` for `dev.wordfarer.shyden.co.uk`: his router (192.168.1.1) negatively cached the name before the Custom Domain existed. The zone's SOA negative TTL is 1800 s, so it clears within 30 min; 1.1.1.1 resolves it and the gate answers 401 + `Basic realm="Wordfarer Non-Prod"`.
-- **Operator steps done 2026-10-01:** the CI token "wordfarer dev deploy (Workers+D1)" now also has `shyden.co.uk - Workers Routes:Edit` (edited in Chrome with Shyden's in-session OK, summary read before saving). Both secrets exist by name.
-- **The dev password value is never written anywhere** (public repo), never typed by the agent, and never entered through a `!` command (that lands in the transcript).
-- **#27 planning started.** Scratch worktree `~/Developer/Repos/wordfarer-wt-27`, branch `scratch/m1-27-proto`, commit `c6555b4`: untested prototype modules `encounters.ts`, `production.ts`, `state.ts`, `sim.ts` in `packages/core/src`. Decisions so far: production is rate x time in #27 (the hour-bucket loop arrives with #28, whose per-word rates make buckets observable); `integrate` moves only the clocks, so AC6 holds bit-exactly; the AC2 bulk-vs-singles tolerance is derived from `Num.pow`'s documented bound (measured worst 2.9e-14 vs singles, 1.07e-13 vs a 60-digit reference, n <= 1000, k <= 300). No tests written yet.
-- **#39 PR B** (AC8 `workers_dev: false`, AC9 Access retirement) waits for a green verify. Its stage is in `~/Developer/Repos/wordfarer-wt-39` (`stage/m2-39`; `.superpowers/sdd/m2-39/` holds the tooling and `HANDOVER.next.md`).
+- **`develop`** = the merge of this handover, on top of `9b83c6c` (re-read it). Merged today: #41 and #45 (#39), #43 (#27).
+- **#27 Done** (closed, AC evidence on the issue): `encounters.ts`, `state.ts`, `production.ts`, `sim.ts`; plan `docs/superpowers/plans/2026-10-01-m1-27-encounters-time-model.md`, reviewed to zero in 5 passes. Hand-offs it records: the hour-bucket production loop arrives with #28's per-word rates; the offline cap becomes upgradable in #29; `initialState` gains its seed in #30; `apply`, `seq` and the golden log in #36.
+- **#39** is complete: AC evidence for PR A, AC8 and AC9 is on the issue. Dev is `dev.wordfarer.shyden.co.uk` (web, Basic auth with the shared dev password, `run_worker_first`) and `dev-api.wordfarer.shyden.co.uk` (sync, noindex only); `workers.dev` answers 404 (error 1042) for both. Access is retired: the application, both reusable policies, the service token and the `CF_ACCESS_*` secrets are deleted.
+- **Secrets by name**: Worker secret `DEV_PASSWORD` on `wordfarer-web-dev`; GitHub `dev` environment secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (the "wordfarer dev deploy (Workers+D1)" token, now with `shyden.co.uk` Workers Routes:Edit) and `DEV_BASIC_AUTH_PASSWORD`. The password value is never written anywhere, never typed by the agent, and never entered through a `!` command.
+- **#44 (Todo, do it next)**: no workflow job has `timeout-minutes`, and `playwright install --with-deps` `apt-get`s from a slow Ubuntu mirror: four slow runs in 80 minutes on 2026-10-01, the worst 35 min 30 s in the browser step (evidence and the image-or-timeout trade-off in the issue comments).
+- **Waiting on CI**: wait with `~/.claude/scripts/wait-run.sh <repo-dir> <run-id> [sha-file]` in a background Bash call, never a bare `gh pr checks --watch` or `gh run watch` (both returned mid-run today). After `gh run rerun`, check the printed attempt number.
+- **Method tooling** (git-ignored, on disk): `.superpowers/sdd/m1-27/` is the latest set (`build-stages.sh`, `gate-stages.sh`, `red.py`, `mutate.py`, `mutation_tables.py`, `gen.py`, `verify_blocks.py`, `commit-stages.py`). Copy it for the next ticket.
 - **Board** (project 4, `PVT_kwDOEOcG584BlRWb`, "Wordfarer Stories"). Status field `PVTSSF_lADOEOcG584BlRWbzhj-3Hc`; options Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`. #39 item `PVTI_lADOEOcG584BlRWbzg95_uA`. New issues are **not** auto-added: add by node id and assert the title.
 
 ## Resume steps
 
-1. `git fetch origin`; re-read `develop`'s head and #39's state. Don't trust this file.
-2. Ask Shyden (AskUserQuestion) for the login test: open `https://dev.wordfarer.shyden.co.uk` (phone on mobile data, or the laptop once the router's cache has expired), any username, the dev password.
-   - **Opens:** the GitHub `dev` secret is the wrong copy. Shyden re-pastes `DEV_BASIC_AUTH_PASSWORD` (Settings, Environments, dev, pencil) with nothing after the last character.
-   - **401:** the Worker secret is the wrong copy. Shyden re-runs `npx wrangler secret put DEV_PASSWORD --name wordfarer-web-dev` in **his own terminal**, typing or pasting at the prompt.
-3. Re-run the `verify` job of the **latest** deploy-dev run on `develop`'s head (`gh run list --branch develop --workflow deploy-dev.yml --json databaseId,headSha` and match the SHA yourself), not run 36889267341: merging this handover redeploys dev stamped with the newer commit, and the old run would check for `0e33a8a`. `gh run rerun <id> --failed`, wait in the background, then read every job and step by name and confirm the `dev-verified` status on that SHA.
-4. Then follow the #39 plan's "Finishing" from step 5: AC evidence on #39, PR B (cherry-pick `stage-t5` with trailers), the AC8 probe, AC9 Access retirement, this file, #39 to Done.
-5. #27: write the tests in `wordfarer-wt-27` against the prototype, then plan it the #26 way (stages, red against stubs, predicted mutations, review to zero, self-approve). Tooling to copy: `.superpowers/sdd/m2-39/`.
+1. `git fetch origin`; re-read `develop`'s head and the board (#39 should be Done, #44 Todo). Don't trust this file.
+2. Plan #44 the #27 way (stages in a scratch worktree, red against stubs, predicted mutations, review to zero, self-approve). Decide between the pinned Playwright image and `--with-deps` behind a step timeout on measured evidence; record why.
+3. Then #28 (words and memory), planned the same way. It brings the hour-bucket production loop that #27 deferred.
