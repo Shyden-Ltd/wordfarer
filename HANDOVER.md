@@ -1,23 +1,22 @@
 # Handover: Wordfarer
 
-**Written:** 2026-10-01 13:05 UTC.
+**Written:** 2026-10-01 17:45 UTC.
 **Next session:** launch Claude from `~/Developer/Repos/wordfarer`. The session names itself "Wordfarer" by hook; type `/color green` once.
 
 ## State
 
-- **Repo:** `Shyden-Ltd/wordfarer`, public. Agent `gh`/`git` act as the `wordfarer-agent` App, which has no `secrets` permission.
-- **`develop`** = `c4a1c1f` (re-read it): PR #38 (#26, core foundations) merged as a merge commit, keeping its eight gated task commits. M1 (epic #6) In Progress.
-- **#26 done**: the plan `docs/superpowers/plans/2026-10-01-m1-26-core-foundations.md` was reviewed to zero in 13 passes (pass 12 found an untested `pickFile` tie-break: M1.12, two cases added, everything re-proved; pass 13 clean). CI run 36865626307 green on every step; deploy-dev run 36865931487 on `c4a1c1f` (see the AC evidence comment on #26 for its result).
-- **#39 filed** (Wordfarer board, Todo): dev on `dev.wordfarer.shyden.co.uk` + `dev-api.wordfarer.shyden.co.uk` behind the shared dev password, copied from shyden.co.uk/ShyTalk. Operator decisions (2026-10-01, asked interactively): **Basic auth replaces Cloudflare Access**; **the dev sync API stays ungated, noindex only**. The full comparison and 12 ACs are in the issue.
-- **The dev password value is never written anywhere** (public repo). Shyden enters it himself into the Worker secret `DEV_PASSWORD` (`wordfarer-web-dev`) and the GitHub `dev` environment secret `DEV_BASIC_AUTH_PASSWORD`.
-- **Method tooling** for planning by executed stages: `.superpowers/sdd/m1-26/` (git-ignored, on disk). Memory `feedback-plan-code-from-executed-stages` describes it; copy the scripts for the next ticket rather than editing these.
-- The scratch worktree `~/Developer/Repos/wordfarer-wt-26` (branch `scratch/m1-26-stages`) is no longer needed once #26 is Done: remove it with `git worktree remove`.
+- **Repo:** `Shyden-Ltd/wordfarer`, public. Agent `gh`/`git` act as the `wordfarer-agent` App, which has no `secrets` permission (listing environment secrets is a 403; read their names in the GitHub UI).
+- **`develop`** = the merge of this handover, on top of `9b83c6c` (re-read it). Merged today: #41 and #45 (#39), #43 (#27).
+- **#27 Done** (closed, AC evidence on the issue): `encounters.ts`, `state.ts`, `production.ts`, `sim.ts`; plan `docs/superpowers/plans/2026-10-01-m1-27-encounters-time-model.md`, reviewed to zero in 5 passes. Hand-offs it records: the hour-bucket production loop arrives with #28's per-word rates; the offline cap becomes upgradable in #29; `initialState` gains its seed in #30; `apply`, `seq` and the golden log in #36.
+- **#39** is complete: AC evidence for PR A, AC8 and AC9 is on the issue. Dev is `dev.wordfarer.shyden.co.uk` (web, Basic auth with the shared dev password, `run_worker_first`) and `dev-api.wordfarer.shyden.co.uk` (sync, noindex only); `workers.dev` answers 404 (error 1042) for both. Access is retired: the application, both reusable policies, the service token and the `CF_ACCESS_*` secrets are deleted.
+- **Secrets by name**: Worker secret `DEV_PASSWORD` on `wordfarer-web-dev`; GitHub `dev` environment secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (the "wordfarer dev deploy (Workers+D1)" token, now with `shyden.co.uk` Workers Routes:Edit) and `DEV_BASIC_AUTH_PASSWORD`. The password value is never written anywhere, never typed by the agent, and never entered through a `!` command.
+- **#44 (Todo, do it next)**: no workflow job has `timeout-minutes`, and `playwright install --with-deps` `apt-get`s from a slow Ubuntu mirror: four slow runs in 80 minutes on 2026-10-01, the worst 35 min 30 s in the browser step (evidence and the image-or-timeout trade-off in the issue comments).
+- **Waiting on CI**: wait with `~/.claude/scripts/wait-run.sh <repo-dir> <run-id> [sha-file]` in a background Bash call, never a bare `gh pr checks --watch` or `gh run watch` (both returned mid-run today). After `gh run rerun`, check the printed attempt number.
+- **Method tooling** (git-ignored, on disk): `.superpowers/sdd/m1-27/` is the latest set (`build-stages.sh`, `gate-stages.sh`, `red.py`, `mutate.py`, `mutation_tables.py`, `gen.py`, `verify_blocks.py`, `commit-stages.py`). Copy it for the next ticket.
 - **Board** (project 4, `PVT_kwDOEOcG584BlRWb`, "Wordfarer Stories"). Status field `PVTSSF_lADOEOcG584BlRWbzhj-3Hc`; options Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`. #39 item `PVTI_lADOEOcG584BlRWbzg95_uA`. New issues are **not** auto-added: add by node id and assert the title.
 
 ## Resume steps
 
-1. `git fetch origin`; re-read `develop`'s head, #26's state and #39's board status. Don't trust this file.
-2. If #26 is not yet Done (its AC comment missing or the deploy not verified), finish it: deploy-dev run 36865931487 must show `deploy`, `verify` success and the `dev-verified` status on `c4a1c1f`.
-3. Plan #39 the #26 way (stages in a scratch worktree, red against stubs, predicted mutations, review to zero, self-approve). Port the lockdown module from shyden.co.uk `functions/_lib/lockdown.js` at `26b80e2` (read-only access to that repo and ShyTalk is authorised for this purpose only; never their boards or the roadmap). The web Worker needs a script with `run_worker_first: true` in its dev config.
-4. Before merging #39, Shyden must set both secrets; the plan gives him the exact commands (`! npx wrangler secret put DEV_PASSWORD --name wordfarer-web-dev`, and the GitHub environment secret in the UI). Access is retired only after the new verify is green on `develop`.
-5. Then #27 (encounters and the time model), planned the same way.
+1. `git fetch origin`; re-read `develop`'s head and the board (#39 should be Done, #44 Todo). Don't trust this file.
+2. Plan #44 the #27 way (stages in a scratch worktree, red against stubs, predicted mutations, review to zero, self-approve). Decide between the pinned Playwright image and `--with-deps` behind a step timeout on measured evidence; record why.
+3. Then #28 (words and memory), planned the same way. It brings the hour-bucket production loop that #27 deferred.
