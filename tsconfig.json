@@ -1,0 +1,19 @@
+{
+  // The root project: repo guards under tests/ and root config files. Each
+  // workspace under apps/ and packages/ has its own tsconfig.json and is
+  // checked by its own `typecheck` script.
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["tests/**/*.ts", "vitest.config.ts"]
+}

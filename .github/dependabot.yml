@@ -12,6 +12,15 @@ updates:
     schedule:
       interval: 'weekly'
     open-pull-requests-limit: 10
+    ignore:
+      # typescript-eslint and svelte-check both declare typescript <6.1.
+      # Remove when both accept TypeScript 7.
+      - dependency-name: 'typescript'
+        versions: ['>=6.1.0']
+      # @cloudflare/vitest-pool-workers 0.22 declares vitest ^4.1.
+      # Remove when it accepts Vitest 5.
+      - dependency-name: 'vitest'
+        versions: ['>=5.0.0']
     groups:
       patch-updates:
         update-types:

@@ -20,8 +20,12 @@ No ads. No energy timers. No sold progress. No punishment for missed days. No ex
 ## Development
 
 ```sh
-npm ci            # Node 24 (see .nvmrc); engine-strict is on
+npm ci                # Node 24 (see .nvmrc); engine-strict is on
+npm run format:check  # Prettier
+npm run lint          # ESLint, zero warnings
+npm run typecheck     # tsc and svelte-check
 npm run test:unit
+npm run build
 ```
 
 Every change follows test-driven development, and each ticket gets its own branch with a PR into `develop`. Third-party GitHub Actions are pinned to full commit SHAs, Dependabot opens its PRs against `develop`, and `tests/unit/supply-chain.test.ts` enforces both.

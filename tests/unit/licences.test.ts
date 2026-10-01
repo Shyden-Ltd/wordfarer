@@ -26,9 +26,10 @@ describe('the licence set (D17)', () => {
   });
 
   it('package.json declares the same code licence', () => {
-    expect(JSON.parse(readFileSync('package.json', 'utf8')).license).toBe(
-      'Apache-2.0',
-    );
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      license?: string;
+    };
+    expect(pkg.license).toBe('Apache-2.0');
   });
 
   it('both content licences ship as full legal code', () => {

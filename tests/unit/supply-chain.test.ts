@@ -45,7 +45,10 @@ const externalUses = () =>
   workflowFiles().flatMap((file) =>
     readFileSync(join(WORKFLOWS, file), 'utf8')
       .split('\n')
-      .map((text, i) => ({ where: `${file}:${i + 1}`, text: text.trim() }))
+      .map((text, i) => ({
+        where: `${file}:${String(i + 1)}`,
+        text: text.trim(),
+      }))
       .filter(({ text }) => /^(-\s*)?uses:\s*[^.\s]/.test(text)),
   );
 
@@ -86,10 +89,11 @@ const subPathRepos = (): [string, Set<string>][] => {
   for (const { text } of externalUses()) {
     const ref = text.match(/uses:\s*([^@\s]+)@/)?.[1];
     if (!ref) continue;
-    const [owner, repo] = ref.split('/');
+    const [owner = '', repo = ''] = ref.split('/');
     const key = `${owner}/${repo}`;
-    if (!refs.has(key)) refs.set(key, new Set());
-    refs.get(key)!.add(ref);
+    const seen = refs.get(key) ?? new Set<string>();
+    seen.add(ref);
+    refs.set(key, seen);
   }
   return [...refs.entries()].filter(([, seen]) => seen.size > 1);
 };
@@ -135,7 +139,10 @@ describe('Dependabot keeps the pins from rotting', () => {
     const config = configBody();
     const ungrouped = subPathRepos()
       .filter(([key]) => !withoutYamlQuotes(config).includes(`${key}*`))
-      .map(([key, refs]) => `${key} used at ${refs.size} sub-paths, ungrouped`);
+      .map(
+        ([key, refs]) =>
+          `${key} used at ${String(refs.size)} sub-paths, ungrouped`,
+      );
 
     expect(
       ungrouped,
@@ -215,8 +222,20 @@ describe('Dependabot keeps the pins from rotting', () => {
  * ranges afresh. The template also tracked a Vitest cache under
  * `node_modules/`, so a clean checkout carried build state.
  */
+interface PackageJson {
+  name: string;
+  devDependencies: Record<string, string>;
+}
+
+interface PackageLock {
+  lockfileVersion: number;
+  name: string;
+  packages: Record<string, { devDependencies?: Record<string, string> }>;
+}
+
 describe('the install is reproducible', () => {
-  const pkg = () => JSON.parse(readFileSync('package.json', 'utf8'));
+  const pkg = () =>
+    JSON.parse(readFileSync('package.json', 'utf8')) as PackageJson;
 
   it('the package is named for this repo, not the template', () => {
     expect(pkg().name).toBe('wordfarer');
@@ -227,10 +246,12 @@ describe('the install is reproducible', () => {
       existsSync('package-lock.json'),
       'npm ci and the CI cache need it',
     ).toBe(true);
-    const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+    const lock = JSON.parse(
+      readFileSync('package-lock.json', 'utf8'),
+    ) as PackageLock;
     expect(lock.lockfileVersion).toBe(3);
     expect(lock.name).toBe(pkg().name);
-    expect(lock.packages[''].devDependencies).toEqual(pkg().devDependencies);
+    expect(lock.packages['']?.devDependencies).toEqual(pkg().devDependencies);
   });
 
   it('nothing under node_modules is tracked', () => {
