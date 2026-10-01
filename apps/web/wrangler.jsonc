@@ -1,0 +1,15 @@
+// The DEV web app: a Worker with static assets and no script (spec D9, as
+// amended 2026-10-01: Cloudflare now folds Pages into Workers). Requests for
+// static assets are free and do not count as Worker invocations.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "wordfarer-web-dev",
+  "compatibility_date": "2026-09-30",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    // A PWA routes on the client, so an unknown path serves index.html.
+    "not_found_handling": "single-page-application",
+  },
+}

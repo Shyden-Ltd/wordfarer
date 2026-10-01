@@ -18,7 +18,7 @@ The global `~/.claude/CLAUDE.md` rules all apply here. This file adds what is sp
 
 ## Flow
 
-- `main` and `develop`. Each ticket gets its own branch, with a PR into `develop`, never directly into `main`. Every `develop` merge deploys the dev environment (Cloudflare Pages + Worker + D1 dev) once the pipeline exists (milestone M0).
+- `main` and `develop`. Each ticket gets its own branch, with a PR into `develop`, never directly into `main`. Every `develop` merge deploys the dev environment (web Worker + sync Worker + D1 dev) once the pipeline exists (milestone M0).
 - TDD: failing test first. Zero warnings policy. Dependabot targets `develop`. Actions are SHA-pinned.
 - Write `Refs #N` in commit messages and PR bodies, never close/fix/resolve next to an issue number unless you mean it.
 

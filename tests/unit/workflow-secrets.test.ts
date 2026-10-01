@@ -144,6 +144,17 @@ describe('this repo’s workflows keep every secret inside an environment', () =
     ).toEqual([]);
   });
 
+  it('finds the deploy secrets it is guarding (liveness)', () => {
+    const references = scanAll().reduce(
+      (n, { scan }) => n + scan.secretReferences,
+      0,
+    );
+    expect(
+      references,
+      'deploy-dev.yml reads four Cloudflare secrets',
+    ).toBeGreaterThanOrEqual(4);
+  });
+
   it('no secret is read outside a protected environment', () => {
     expect(scanAll().flatMap(({ scan }) => scan.findings)).toEqual([]);
   });
