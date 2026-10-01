@@ -21,12 +21,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A reusable-workflow call may not set timeout-minutes; ci.yml's own job
+  # carries it (tests/unit/workflow-timeouts.test.ts).
   test:
     uses: ./.github/workflows/ci.yml
 
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    # A normal deploy takes 35 s; GitHub's default would be 360 minutes (#44).
+    timeout-minutes: 10
     environment:
       name: dev
       url: https://dev.wordfarer.shyden.co.uk
@@ -58,6 +62,8 @@ jobs:
   verify:
     needs: deploy
     runs-on: ubuntu-latest
+    # 8 s on a first-try pass; verify-dev retries up to 18 times, 10 s apart.
+    timeout-minutes: 10
     environment:
       name: dev
       url: https://dev.wordfarer.shyden.co.uk

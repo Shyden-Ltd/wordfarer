@@ -16,7 +16,7 @@ interface Step {
 }
 
 const ci = parse(readFileSync('.github/workflows/ci.yml', 'utf8')) as {
-  jobs: Record<string, { steps: Step[] }>;
+  jobs: Record<string, { container?: { image?: string }; steps: Step[] }>;
 };
 
 describe('the cross-engine harness', () => {
@@ -27,18 +27,20 @@ describe('the cross-engine harness', () => {
     expect([...engines].sort()).toEqual(['chromium', 'firefox', 'webkit']);
   });
 
-  it('runs in CI, after installing all three browsers', () => {
-    const steps = ci.jobs['build-and-test']?.steps ?? [];
-    const install = steps.findIndex((s) =>
-      /playwright install --with-deps chromium firefox webkit/.test(
-        s.run ?? '',
-      ),
+  it('runs in CI, in the Playwright image that carries all three browsers (#44)', () => {
+    const job = ci.jobs['build-and-test'];
+    expect(job?.container?.image ?? '', 'the job’s image').toMatch(
+      /^mcr\.microsoft\.com\/playwright:v/,
     );
-    const run = steps.findIndex(
-      (s) => (s.run ?? '').trim() === 'npm run test:engines',
-    );
-    expect(install, 'browser install step').toBeGreaterThanOrEqual(0);
-    expect(run, 'test:engines step').toBeGreaterThan(install);
+    const steps = job?.steps ?? [];
+    expect(
+      steps.filter((s) => (s.run ?? '').trim() === 'npm run test:engines'),
+      'test:engines step',
+    ).toHaveLength(1);
+    expect(
+      steps.filter((s) => /playwright install/.test(s.run ?? '')),
+      'no step installs browsers: the image has them, and --with-deps reached an apt mirror',
+    ).toEqual([]);
   });
 
   it('is what npm run test:engines runs', () => {

@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse } from 'yaml';
 import { withoutYamlComments, withoutYamlQuotes } from './source-text';
+import { isRecord } from './workflow-secrets';
 
 /**
  * The CI supply chain is pinned, and something keeps it current.
@@ -22,8 +24,10 @@ import { withoutYamlComments, withoutYamlQuotes } from './source-text';
  *    beside each SHA is what makes a bump reviewable by a human instead of an
  *    opaque hex swap.
  *
- * SOURCE TEXT, not YAML parsing: no YAML parser is available here and none is
- * worth adding ("no new npm dependencies"), matching pipeline-wiring.test.ts.
+ * The `uses:` and Dependabot checks read SOURCE TEXT, stripped of comments
+ * where it matters. The container-image checks PARSE the workflows (`yaml`),
+ * since `container:` is either a string or a mapping and a comment must not
+ * count as an image.
  */
 
 const WORKFLOWS = '.github/workflows';
@@ -117,6 +121,68 @@ describe('the CI supply chain is pinned', () => {
       .map(({ where, text }) => `${where} ${text}`);
 
     expect(opaque, 'a bare SHA bump is unreviewable by a human').toEqual([]);
+  });
+});
+
+/** Every container and service image a workflow job runs, by job. */
+const containerImages = () =>
+  workflowFiles().flatMap((file) => {
+    const doc: unknown = parse(readFileSync(join(WORKFLOWS, file), 'utf8'));
+    const jobs = isRecord(doc) && isRecord(doc.jobs) ? doc.jobs : {};
+    return Object.entries(jobs).flatMap(([id, job]) => {
+      if (!isRecord(job)) return [];
+      const services = isRecord(job.services)
+        ? Object.values(job.services)
+        : [];
+      return [job.container, ...services]
+        .map((c) => (isRecord(c) ? c.image : c))
+        .filter((image): image is string => typeof image === 'string')
+        .map((image) => ({ where: `${file}: jobs.${id}`, image }));
+    });
+  });
+
+const lockedVersion = (name: string): unknown => {
+  const lock: unknown = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+  const packages =
+    isRecord(lock) && isRecord(lock.packages) ? lock.packages : {};
+  const entry = packages[`node_modules/${name}`];
+  return isRecord(entry) ? entry.version : undefined;
+};
+
+describe('the browser image is pinned and matches the test runner (#44)', () => {
+  it('there is an image to check: CI gets its browsers from one', () => {
+    expect(
+      containerImages().filter(({ image }) =>
+        image.startsWith('mcr.microsoft.com/playwright:'),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('every container image is pinned to a digest, not just a tag', () => {
+    const unpinned = containerImages()
+      .filter(({ image }) => !/@sha256:[0-9a-f]{64}$/.test(image))
+      .map(({ where, image }) => `${where} ${image}`);
+    expect(unpinned, 'a tag can be re-pushed under us').toEqual([]);
+  });
+
+  it('the Playwright image is the version of @playwright/test the lockfile installs', () => {
+    const version = lockedVersion('@playwright/test');
+    expect(version, 'positive control: the lockfile names it').toMatch(
+      /^\d+\.\d+\.\d+$/,
+    );
+    const stale = containerImages()
+      .filter(({ image }) => image.startsWith('mcr.microsoft.com/playwright:'))
+      .filter(
+        ({ image }) =>
+          !image.startsWith(
+            `mcr.microsoft.com/playwright:v${String(version)}-`,
+          ),
+      )
+      .map(({ where, image }) => `${where} ${image}`);
+    expect(
+      stale,
+      `a browser build the runner was not made for fails to launch; move the tag to v${String(version)}-noble and re-read its digest from https://mcr.microsoft.com/v2/playwright/manifests/v${String(version)}-noble`,
+    ).toEqual([]);
   });
 });
 
