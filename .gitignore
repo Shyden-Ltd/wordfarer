@@ -13,6 +13,8 @@ test-results/
 # Cloudflare local state
 .wrangler/
 .dev.vars
+# Generated on install by `wrangler types` (root postinstall)
+apps/sync-worker/worker-configuration.d.ts
 
 # Session-local agent files (brainstorm mockups, SDD scratch)
 .superpowers/
