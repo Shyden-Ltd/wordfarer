@@ -73,7 +73,7 @@ Everyday situations in which you hear the language. Examples for `en-id`: Warung
 
 - Spending Understanding **picks up** a word or phrase: a collectible card drawn from the current destination's lexicon, in curriculum order (CEFR A1 first).
 - Each word carries tags and boosts every Encounter that shares a tag, so words from earlier destinations keep paying on later ones.
-- Word bonus: `b_w = rankBonus[rank] · (0.5 + 0.5·R)`, where `R` is FSRS retrievability (0 to 1). Per-Encounter `M_words = 1 + Σ b_w` over tagged words.
+- Word bonus: `b_w = rankBonus[rank] · (0.5 + 0.5·R)`, where `R` is FSRS retrievability (0 to 1), taken as the word's mean over the current clock hour ([M1 design §2.2](2026-10-01-m1-core-simulation-design.md)). Per-Encounter `M_words = 1 + Σ b_w` over tagged words.
 - `rankBonus`: Heard 0.02 · Recognised 0.05 · Recalled 0.12 · Fluent 0.25 · Mastered 0.40, so Mastered is worth 20× Heard.
 - **Floor:** as `R` falls towards 0, a word that is never reviewed decays towards `0.5 · rankBonus[rank]`, half of its current rank's bonus, and never below it. Ranks drop only on a wrong answer, never through absence, so idlers lose nothing they earned (DN16).
 
@@ -194,6 +194,7 @@ packages/core        pure TS simulation: state, balance, advance(), FSRS wrapper
 packages/content     course packs (JSON), Zod schema, build-time validators and ship gates
 packages/save        save schema, versioning and migrations, checksum, rotating backups
 packages/sync        client for pairing, encrypted sync, ranked upload, grants
+packages/bots        pacing bots and the pacing report (§12.2)
 packages/ui          Svelte 5 components and screens, SVG motif generator, i18n catalogues (en, id)
 apps/web             Vite PWA shell (Worker static assets)
 apps/desktop         Electron shell + steamworks.js (main process)
@@ -206,7 +207,7 @@ tools/review         local content review UI
 ### 6.2 Core
 
 - No DOM, timers, network or `Date.now()` inside `core`. Time is an argument.
-- `advance(state, elapsedMs, events) → state`: closed-form integration between events (purchases, journey returns, automation ticks). Advancing 1 h then 1 h must equal advancing 2 h (a property test, §12.1).
+- `advance(state, elapsedMs, events) → state`: closed-form integration between events (purchases, journey returns, automation ticks). The time model (integer-millisecond clock, state anchored at its last event, hourly rate buckets) and the rule that every transcendental function goes through deterministic pure-JS maths are fixed in the [M1 design](2026-10-01-m1-core-simulation-design.md) §2. Advancing 1 h then 1 h must equal advancing 2 h (a property test, §12.1).
 - **Offline progress** is the same call with a larger gap, capped at **24 h** (upgradable to 72 h with Insight) and summarised on a "welcome back" card.
 - Big numbers sit behind a `Num` type backed by **break_infinity.js**.
 - Every player action is a typed, serialisable **event**. The event log drives both the local save and ranked verification (§10).
