@@ -34,7 +34,7 @@ jobs:
         run: npm run typecheck
       - name: Unit tests
         run: npm run test:unit
-      - name: Worker tests (workerd + local D1)
+      - name: Worker tests (sync in workerd + local D1, web gate through the asset router)
         run: npm run test:worker
       - name: Browsers for the cross-engine check
         run: npx playwright install --with-deps chromium firefox webkit

@@ -2,8 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
+  NO_INDEX,
+  basicAuthorization,
   gateProblems,
   healthProblems,
+  leaked,
+  robotsProblems,
   verifyDev,
   webProblems,
   type Probe,
@@ -11,79 +15,125 @@ import {
 
 const SHA = 'd547bd669678987eb85b5807d1a26ea55eaeb987';
 const OLD = '1f660b30f75d081ae6559d175e5c0c3e26acb84c';
+const PASSWORD = 'pä:ss';
+const ROBOTS = '# blocked\nUser-agent: *\nDisallow: /\n';
 const page = (sha: string) =>
-  `<html><head><meta name="wordfarer-commit" content="${sha}" /></head></html>`;
+  `<!doctype html><html><head><meta name="wordfarer-commit" content="${sha}" /></head></html>`;
 const probe = (
   status: number,
   body = '',
-  location: string | null = null,
-): Probe => ({
-  status,
-  body,
-  location,
+  headers: Record<string, string> = {},
+): Probe => ({ status, body, headers: new Headers(headers) });
+const challenge = { 'www-authenticate': 'Basic realm="Wordfarer Non-Prod"' };
+const noindex = { 'x-robots-tag': NO_INDEX };
+
+describe('basicAuthorization', () => {
+  it('encodes the password as UTF-8 after a fixed username', () => {
+    const header = basicAuthorization(PASSWORD);
+    expect(header.startsWith('Basic ')).toBe(true);
+    const bytes = Uint8Array.from(atob(header.slice(6)), (c) =>
+      c.charCodeAt(0),
+    );
+    expect(new TextDecoder().decode(bytes)).toBe(`verify-dev:${PASSWORD}`);
+  });
 });
 
 describe('gateProblems', () => {
-  it.each([401, 403])('accepts a %i refusal', (status) => {
-    expect(gateProblems('web', probe(status))).toEqual([]);
+  it('accepts a 401 Basic challenge with no app in it', () => {
+    expect(gateProblems('web', probe(401, 'testers only', challenge))).toEqual(
+      [],
+    );
   });
 
-  it('accepts a redirect to the Access login', () => {
-    expect(
-      gateProblems(
-        'web',
-        probe(
-          302,
-          '',
-          'https://shyden.cloudflareaccess.com/cdn-cgi/access/login/x',
-        ),
-      ),
-    ).toEqual([]);
-  });
-
-  it('refuses a redirect anywhere else, including a look-alike host', () => {
-    expect(
-      gateProblems(
-        'web',
-        probe(302, '', 'https://cloudflareaccess.com.evil.test/'),
-      ),
-    ).toEqual([
-      'web: redirects to https://cloudflareaccess.com.evil.test/, not to Cloudflare Access',
+  it('fails a 200, naming the missing gate', () => {
+    expect(gateProblems('web', probe(200, page(SHA)))).toEqual([
+      'web: answered 200, expected 401; the password gate is not in front of it',
+      'web: no Basic WWW-Authenticate challenge',
+      'web: the response carries app markup',
     ]);
   });
 
-  it('refuses a relative redirect, which stays on the same host', () => {
-    expect(
-      gateProblems('web', probe(302, '', '/cdn-cgi/access/login')),
-    ).toEqual([
-      'web: redirects to /cdn-cgi/access/login, not to Cloudflare Access',
+  it.each([
+    ['a non-Basic challenge', { 'www-authenticate': 'Bearer' }],
+    ['no challenge at all', {}],
+  ])('fails a 401 with %s', (_case, headers) => {
+    expect(gateProblems('web', probe(401, '', headers))).toEqual([
+      'web: no Basic WWW-Authenticate challenge',
     ]);
   });
 
-  it('fails when the site answers 200 to an anonymous request', () => {
-    expect(gateProblems('sync', probe(200))).toEqual([
-      'sync: answered 200 without a service token; the Access gate is not in front of it',
+  it('fails a 401 that still carries the page', () => {
+    expect(gateProblems('web', probe(401, page(SHA), challenge))).toEqual([
+      'web: the response carries app markup',
+    ]);
+  });
+
+  it('fails a redirect, which is not the challenge', () => {
+    expect(gateProblems('web', probe(302, '', challenge))).toEqual([
+      'web: answered 302, expected 401; the password gate is not in front of it',
+    ]);
+  });
+});
+
+describe('leaked', () => {
+  it.each([
+    [200, true],
+    [204, true],
+    [299, true],
+    [301, false],
+    [401, false],
+    [500, false],
+  ])('status %i leaked: %s', (status, expected) => {
+    expect(leaked(probe(status))).toBe(expected);
+  });
+});
+
+describe('robotsProblems', () => {
+  it('accepts a robots.txt that blocks every crawler', () => {
+    expect(robotsProblems(probe(200, ROBOTS))).toEqual([]);
+  });
+
+  it.each([
+    ['allows everything', 'User-agent: *\nDisallow:\n'],
+    ['blocks one crawler only', 'User-agent: Googlebot\nDisallow: /\n'],
+    ['blocks a path only', 'User-agent: *\nDisallow: /admin\n'],
+    ['is empty', ''],
+  ])('fails one that %s', (_case, body) => {
+    expect(robotsProblems(probe(200, body))).toEqual([
+      'robots.txt: does not block every crawler',
+    ]);
+  });
+
+  it('fails a challenge in place of robots.txt', () => {
+    expect(robotsProblems(probe(401, ROBOTS))).toEqual([
+      'robots.txt: status 401 without credentials, expected 200',
     ]);
   });
 });
 
 describe('webProblems', () => {
-  it('accepts the expected commit', () => {
-    expect(webProblems(probe(200, page(SHA)), SHA)).toEqual([]);
+  it('accepts the expected commit with noindex', () => {
+    expect(webProblems(probe(200, page(SHA), noindex), SHA)).toEqual([]);
   });
 
   it('names the stale commit when the previous deploy is still served', () => {
-    expect(webProblems(probe(200, page(OLD)), SHA)).toEqual([
+    expect(webProblems(probe(200, page(OLD), noindex), SHA)).toEqual([
       `web: serves commit ${OLD}, expected ${SHA}`,
     ]);
   });
 
+  it('fails a page without the noindex header', () => {
+    expect(webProblems(probe(200, page(SHA)), SHA)).toEqual([
+      `web: X-Robots-Tag is null, expected "${NO_INDEX}"`,
+    ]);
+  });
+
   it('fails a page with no stamp, and a non-200', () => {
-    expect(webProblems(probe(200, '<html></html>'), SHA)).toEqual([
+    expect(webProblems(probe(200, '<html></html>', noindex), SHA)).toEqual([
       'web: no wordfarer-commit meta tag in the page',
     ]);
-    expect(webProblems(probe(500, page(SHA)), SHA)).toEqual([
-      'web: status 500, expected 200',
+    expect(webProblems(probe(401, '', noindex), SHA)).toEqual([
+      'web: status 401 with the password, expected 200',
     ]);
   });
 });
@@ -91,8 +141,8 @@ describe('webProblems', () => {
 describe('healthProblems', () => {
   const healthy = JSON.stringify({ ok: true, commit: SHA, db: 'ok' });
 
-  it('accepts ok, the commit and db ok', () => {
-    expect(healthProblems(probe(200, healthy), SHA)).toEqual([]);
+  it('accepts ok, the commit, db ok and noindex', () => {
+    expect(healthProblems(probe(200, healthy, noindex), SHA)).toEqual([]);
   });
 
   it.each([
@@ -100,58 +150,73 @@ describe('healthProblems', () => {
     ['a D1 failure', { ok: false, commit: SHA, db: 'unreachable' }],
     ['an extra field', { ok: true, commit: SHA, db: 'ok', debug: 1 }],
   ])('fails %s', (_label, body) => {
-    expect(healthProblems(probe(200, JSON.stringify(body)), SHA)).toHaveLength(
-      1,
-    );
+    expect(
+      healthProblems(probe(200, JSON.stringify(body), noindex), SHA),
+    ).toHaveLength(1);
+  });
+
+  it('fails a healthy answer without the noindex header', () => {
+    expect(
+      healthProblems(probe(200, healthy, { 'x-robots-tag': 'noindex' }), SHA),
+    ).toEqual([`sync: X-Robots-Tag is "noindex", expected "${NO_INDEX}"`]);
   });
 
   it('fails a non-JSON body and a non-200', () => {
-    expect(healthProblems(probe(200, 'oops'), SHA)).toEqual([
+    expect(healthProblems(probe(200, 'oops', noindex), SHA)).toEqual([
       'sync: /health did not return JSON',
     ]);
-    expect(healthProblems(probe(503, healthy), SHA)).toEqual([
+    expect(healthProblems(probe(503, healthy, noindex), SHA)).toEqual([
       'sync: /health status 503, expected 200',
     ]);
   });
 });
 
 /**
- * verifyDev end to end over real HTTP: a local server stands in for Access,
- * answering a 302 to the login host without the service-token headers and
- * the site with them. `served` is the commit it currently serves.
+ * verifyDev end to end over real HTTP: a local server stands in for both dev
+ * hosts. `/health` is the ungated sync API; every other path is the web host,
+ * which answers the Basic challenge unless the password is right, except
+ * robots.txt. The `let`s below switch it between healthy and broken states.
  */
 describe('verifyDev', () => {
   let server: Server;
   let base = '';
   let served = SHA;
   let gated = true;
+  let tagged = true;
   let requests = 0;
   let dropAuthorised = 0;
+  const seenAuthorization: string[] = [];
 
   beforeAll(async () => {
     server = createServer((req, res) => {
       requests += 1;
-      const authorised =
-        req.headers['cf-access-client-id'] === 'id' &&
-        req.headers['cf-access-client-secret'] === 'secret';
+      const tag: Record<string, string> = tagged
+        ? { 'x-robots-tag': NO_INDEX }
+        : {};
+      const authorization = req.headers.authorization ?? '';
+      seenAuthorization.push(authorization);
+      const authorised = authorization === basicAuthorization(PASSWORD);
       if (authorised && dropAuthorised > 0) {
         dropAuthorised -= 1;
         req.socket.destroy();
         return;
       }
-      if (gated && !authorised) {
-        res.writeHead(302, {
-          location: 'https://team.cloudflareaccess.com/cdn-cgi/access/login',
-        });
-        res.end();
-        return;
-      }
       if (req.url === '/health') {
-        res.writeHead(200, { 'content-type': 'application/json' });
+        res.writeHead(200, { 'content-type': 'application/json', ...tag });
         res.end(JSON.stringify({ ok: true, commit: served, db: 'ok' }));
         return;
       }
-      res.writeHead(200, { 'content-type': 'text/html' });
+      if (req.url === '/robots.txt') {
+        res.writeHead(200, { 'content-type': 'text/plain', ...tag });
+        res.end(ROBOTS);
+        return;
+      }
+      if (gated && !authorised) {
+        res.writeHead(401, { ...challenge, ...tag });
+        res.end('testers only');
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'text/html', ...tag });
       res.end(page(served));
     });
     await new Promise<void>((resolve) =>
@@ -168,70 +233,133 @@ describe('verifyDev', () => {
     webUrl: `${base}/`,
     syncUrl: base,
     sha: SHA,
-    clientId: 'id',
-    clientSecret: 'secret',
+    password: PASSWORD,
   });
 
-  it('passes a gated site serving the expected commit', async () => {
+  const reset = () => {
     served = SHA;
     gated = true;
+    tagged = true;
     requests = 0;
+    dropAuthorised = 0;
+    seenAuthorization.length = 0;
+  };
+
+  it('passes a gated site serving the expected commit', async () => {
+    reset();
     expect(await verifyDev(target(), { attempts: 1, delayMs: 0 })).toEqual([]);
     expect(
       requests,
-      'two anonymous probes, then web and health with the token',
-    ).toBe(4);
+      'no credentials, wrong password, robots, web, health',
+    ).toBe(5);
+    expect(seenAuthorization).toEqual([
+      '',
+      basicAuthorization(`${PASSWORD}x`),
+      '',
+      basicAuthorization(PASSWORD),
+      '',
+    ]);
   });
 
-  it('fails, without retrying, when the gate is gone', async () => {
-    served = SHA;
+  it('fails at once, without retrying, when the gate is gone', async () => {
+    reset();
     gated = false;
-    requests = 0;
-    expect(await verifyDev(target(), { attempts: 3, delayMs: 0 })).toEqual([
-      'web: answered 200 without a service token; the Access gate is not in front of it',
-      'sync: answered 200 without a service token; the Access gate is not in front of it',
-    ]);
-    expect(requests).toBe(2);
-    gated = true;
+    const problems = await verifyDev(target(), { attempts: 3, delayMs: 0 });
+    expect(problems).toContain(
+      'web without credentials: answered 200, expected 401; the password gate is not in front of it',
+    );
+    expect(problems).toContain(
+      'web with a wrong password: answered 200, expected 401; the password gate is not in front of it',
+    );
+    expect(requests, 'the two gate probes of one attempt').toBe(2);
   });
 
   it('retries a stale deploy, then reports both stale hosts', async () => {
+    reset();
     served = OLD;
-    requests = 0;
     const problems = await verifyDev(target(), { attempts: 3, delayMs: 0 });
     expect(problems).toEqual([
       `web: serves commit ${OLD}, expected ${SHA}`,
       `sync: /health returned ${JSON.stringify({ ok: true, commit: OLD, db: 'ok' })}, expected ${JSON.stringify({ ok: true, commit: SHA, db: 'ok' })}`,
     ]);
-    expect(requests, 'two gate probes plus three attempts of two').toBe(8);
-    served = SHA;
+    expect(requests, 'three attempts of five probes').toBe(15);
+  });
+
+  it('fails when the noindex header is missing everywhere', async () => {
+    reset();
+    tagged = false;
+    expect(await verifyDev(target(), { attempts: 1, delayMs: 0 })).toEqual([
+      'web: X-Robots-Tag is null, expected "noindex, nofollow, noarchive"',
+      'sync: X-Robots-Tag is null, expected "noindex, nofollow, noarchive"',
+    ]);
   });
 
   it('retries through a dropped connection instead of giving up', async () => {
-    served = SHA;
-    gated = true;
-    requests = 0;
+    reset();
     dropAuthorised = 1;
     expect(await verifyDev(target(), { attempts: 3, delayMs: 0 })).toEqual([]);
-    expect(requests, 'two gate probes, a dropped attempt, a clean one').toBe(6);
+    expect(requests, 'one attempt with a dropped web probe, one clean').toBe(
+      10,
+    );
   });
 
-  it('reports an unreachable host as a problem, never a crash', async () => {
+  /** An origin that refuses connections: a port that was free a moment ago. */
+  async function closedOrigin(): Promise<string> {
     const closed = createServer();
     await new Promise<void>((resolve) =>
       closed.listen(0, '127.0.0.1', resolve),
     );
     const port = String((closed.address() as AddressInfo).port);
     await new Promise((resolve) => closed.close(resolve));
-    const unreachable = `http://127.0.0.1:${port}/`;
+    return `http://127.0.0.1:${port}`;
+  }
+
+  it('reports an unreachable host as a problem, never a crash', async () => {
+    reset();
+    const unreachable = `${await closedOrigin()}/`;
     const problems = await verifyDev(
       { ...target(), webUrl: unreachable },
       { attempts: 1, delayMs: 0 },
     );
     expect(problems).toEqual([
       expect.stringMatching(
+        new RegExp(
+          `^web without credentials: request to ${unreachable} failed: `,
+        ),
+      ),
+      expect.stringMatching(
+        new RegExp(
+          `^web with a wrong password: request to ${unreachable} failed: `,
+        ),
+      ),
+      expect.stringMatching(/^robots\.txt: request to .+ failed: /),
+      expect.stringMatching(
         new RegExp(`^web: request to ${unreachable} failed: `),
       ),
     ]);
+  });
+
+  it('never puts the password in a problem', async () => {
+    const once = { attempts: 1, delayMs: 0 };
+    reset();
+    gated = false;
+    const leaking = await verifyDev(target(), once);
+    reset();
+    served = OLD;
+    tagged = false;
+    const broken = await verifyDev(target(), once);
+    const origin = await closedOrigin();
+    const unreachable = await verifyDev(
+      { ...target(), webUrl: `${origin}/`, syncUrl: origin },
+      once,
+    );
+    // Every kind of message: a judged leak, judged answers, failed requests.
+    expect(leaking).toHaveLength(6);
+    expect(broken).toHaveLength(4);
+    expect(unreachable).toHaveLength(5);
+    for (const problem of [...leaking, ...broken, ...unreachable]) {
+      expect(problem).not.toContain(PASSWORD);
+      expect(problem).not.toContain(basicAuthorization(PASSWORD).slice(6));
+    }
   });
 });

@@ -10,5 +10,8 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0"
+  },
+  "dependencies": {
+    "@wordfarer/lockdown": "*"
   }
 }

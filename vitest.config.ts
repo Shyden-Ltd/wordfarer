@@ -12,6 +12,8 @@ export default defineConfig({
       'apps/web/**/*.test.ts',
       'packages/*/test/**/*.test.ts',
     ],
-    exclude: ['**/node_modules/**', '**/dist/**'],
+    // apps/web/test drives the built dev Worker through wrangler's harness,
+    // so it runs after a build, under the web workspace's own config.
+    exclude: ['**/node_modules/**', '**/dist/**', 'apps/web/test/**'],
   },
 });
