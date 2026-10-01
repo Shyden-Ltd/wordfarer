@@ -1,8 +1,17 @@
 {
-  "name": "repo-template",
+  "name": "wordfarer",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24" },
-  "scripts": { "test:unit": "vitest run" },
-  "devDependencies": { "vitest": "^5.0.0" }
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test:unit": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.0"
+  },
+  "allowScripts": {
+    "fsevents": false
+  }
 }

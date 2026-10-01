@@ -1,0 +1,21 @@
+# Dependencies and builds
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+reports/mutation/
+
+# Test output
+playwright-report/
+test-results/
+
+# Cloudflare local state
+.wrangler/
+.dev.vars
+
+# Session-local agent files (brainstorm mockups, SDD scratch)
+.superpowers/
+
+# OS
+.DS_Store
