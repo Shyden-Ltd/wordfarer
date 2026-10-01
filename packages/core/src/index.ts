@@ -5,3 +5,14 @@
  */
 export { exp, expm1, ln, log10, log1p, pow } from './det-math';
 export { Num, type NumTuple } from './num';
+export {
+  bucketEnd,
+  bucketStart,
+  gridTicksBetween,
+  HOUR_MS,
+  nextGridTick,
+  simMs,
+  wallMs,
+  type SimMs,
+  type WallMs,
+} from './clock';
