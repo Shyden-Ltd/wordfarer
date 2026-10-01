@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "notices": "node scripts/third-party-notices.ts"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
