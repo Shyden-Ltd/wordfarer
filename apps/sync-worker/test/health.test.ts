@@ -82,3 +82,43 @@ describe('GET /health', () => {
     },
   );
 });
+
+describe('non-prod marking (#39)', () => {
+  const host = (origin: string, path: string) =>
+    exports.default.fetch(new Request(`${origin}${path}`));
+
+  it.each(['/health', '/missing'])(
+    'marks %s noindex on the dev API host, with no password asked',
+    async (path) => {
+      const response = await host(
+        'https://dev-api.wordfarer.shyden.co.uk',
+        path,
+      );
+      expect(response.status).not.toBe(401);
+      expect(response.headers.get('x-robots-tag')).toBe(
+        'noindex, nofollow, noarchive',
+      );
+    },
+  );
+
+  it('serves blocking robots.txt on the dev API host', async () => {
+    const response = await host(
+      'https://dev-api.wordfarer.shyden.co.uk',
+      '/robots.txt',
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('User-agent: *\nDisallow: /\n');
+  });
+
+  it('leaves the production API host unmarked, robots.txt included', async () => {
+    const health = await host('https://api.wordfarer.shyden.co.uk', '/health');
+    expect(health.status).toBe(200);
+    expect(health.headers.get('x-robots-tag')).toBeNull();
+    const robots = await host(
+      'https://api.wordfarer.shyden.co.uk',
+      '/robots.txt',
+    );
+    expect(robots.status).toBe(404);
+    expect(robots.headers.get('x-robots-tag')).toBeNull();
+  });
+});
