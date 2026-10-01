@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { withoutYamlComments, withoutYamlQuotes } from './source-text';
@@ -202,5 +203,45 @@ describe('Dependabot keeps the pins from rotting', () => {
       'an ecosystem defaults to the default branch, bypassing the develop gate',
     ).toBe(ecosystems);
     expect(config).not.toMatch(/target-branch:\s*["']?main["']?/);
+  });
+});
+
+/**
+ * The install is reproducible (Refs #1).
+ *
+ * The first CI run on develop died in `actions/setup-node` before a single
+ * test ran: `cache: 'npm'` needs a lock file, and the template shipped none.
+ * Without one, `npm ci` refuses too, and every install would resolve the
+ * ranges afresh. The template also tracked a Vitest cache under
+ * `node_modules/`, so a clean checkout carried build state.
+ */
+describe('the install is reproducible', () => {
+  const pkg = () => JSON.parse(readFileSync('package.json', 'utf8'));
+
+  it('the package is named for this repo, not the template', () => {
+    expect(pkg().name).toBe('wordfarer');
+  });
+
+  it('a lock file is committed and agrees with package.json', () => {
+    expect(
+      existsSync('package-lock.json'),
+      'npm ci and the CI cache need it',
+    ).toBe(true);
+    const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+    expect(lock.lockfileVersion).toBe(3);
+    expect(lock.name).toBe(pkg().name);
+    expect(lock.packages[''].devDependencies).toEqual(pkg().devDependencies);
+  });
+
+  it('nothing under node_modules is tracked', () => {
+    const tracked = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
+      .split('\n')
+      .filter((path) => path !== '');
+    expect(tracked, 'positive control: git ls-files sees this repo').toContain(
+      'package.json',
+    );
+    expect(tracked.filter((path) => path.startsWith('node_modules/'))).toEqual(
+      [],
+    );
   });
 });
