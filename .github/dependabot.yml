@@ -1,0 +1,47 @@
+# Dependency updates for every ecosystem this repo carries, plus the Actions
+# themselves. Version updates are NOT inheritable org-wide -- only SECURITY
+# updates are -- so this file is mandatory in every repo and must be created
+# deliberately each time. Never assume an org setting covers it.
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    # Never `main`. A PR opened against a protected default branch either
+    # cannot merge or bypasses the dev gate entirely.
+    target-branch: 'develop'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    groups:
+      patch-updates:
+        update-types:
+          - 'patch'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    target-branch: 'develop'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    groups:
+      # CONFIGURED, not described. Dependabot treats actions/cache,
+      # actions/cache/restore and actions/cache/save as three dependencies, so
+      # ungrouped they arrive as three PRs, each moving one SHA while its
+      # siblings lag behind. ShyTalk shipped that bug as SHY-0226.
+      #
+      # This group sits ABOVE patch-updates deliberately: Dependabot assigns a
+      # dependency to the FIRST group whose patterns match and then stops
+      # looking, so a catch-all keyed on update-type would swallow a patch bump
+      # of a sub-path before this group was ever consulted. Order is the
+      # control, not presence.
+      #
+      # It is declared here even though a new repo uses no sub-path actions
+      # yet, because the failure is silent on the day someone adds one. The
+      # guard in tests/unit/supply-chain.test.ts is dormant until then and
+      # fires the moment it matters.
+      actions-subpaths:
+        patterns:
+          - 'actions/cache*'
+      patch-updates:
+        update-types:
+          - 'patch'

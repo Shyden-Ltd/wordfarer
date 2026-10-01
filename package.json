@@ -1,0 +1,8 @@
+{
+  "name": "repo-template",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": { "test:unit": "vitest run" },
+  "devDependencies": { "vitest": "^5.0.0" }
+}
