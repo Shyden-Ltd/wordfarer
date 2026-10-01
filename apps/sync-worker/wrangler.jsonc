@@ -1,0 +1,23 @@
+// The DEV sync Worker (spec §6.7). Production gets its own config when the
+// production pipeline is built; until then this file describes dev only.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "wordfarer-sync-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    // Overwritten at deploy time with `--var COMMIT:<sha>`, so /health can
+    // prove which commit is live. "local" never matches a SHA.
+    "COMMIT": "local",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wordfarer-dev",
+      "database_id": "7ef754ed-f21e-4524-ac11-eac9bde28cc0",
+      "migrations_dir": "migrations",
+    },
+  ],
+}

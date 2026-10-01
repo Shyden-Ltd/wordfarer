@@ -11,7 +11,9 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "npm run types --workspace @wordfarer/sync-worker",
     "test:unit": "vitest run",
+    "test:worker": "npm run test --workspace @wordfarer/sync-worker",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present",
     "format": "prettier --write .",
@@ -30,11 +32,18 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.0",
     "vitest": "^4.1.11",
+    "wrangler": "^4.145.0",
     "yaml": "^2.9.1"
   },
   "allowScripts": {
     "esbuild": true,
     "fsevents": false,
     "workerd": true
+  },
+  "overrides": {
+    "@cloudflare/vitest-pool-workers": {
+      "wrangler": "$wrangler",
+      "miniflare": "5.20260930.0-alpha"
+    }
   }
 }

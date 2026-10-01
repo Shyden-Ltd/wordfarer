@@ -8,31 +8,45 @@ import { describe, expect, it } from 'vitest';
  * an untracked TypeScript file on a contributor's machine failed `npm run lint`
  * while CI, which has no such file, stayed green.
  */
-const ignoredDirectories = readFileSync('.gitignore', 'utf8')
+const ignoredEntries = readFileSync('.gitignore', 'utf8')
   .split('\n')
   .map((line) => line.trim())
   .filter(
-    (line) =>
-      line.endsWith('/') && !line.startsWith('#') && !line.startsWith('!'),
+    (line) => line !== '' && !line.startsWith('#') && !line.startsWith('!'),
   );
 
+/** A directory entry is probed with a file inside it; a file entry as itself. */
+const probeFor = (entry: string): string =>
+  entry.endsWith('/') ? `${entry}probe.ts` : entry;
+
+/**
+ * Only entries ESLint would lint with every ignore switched off can show
+ * anything. ESLint reports a file no config matches (`.dev.vars`, `.DS_Store`)
+ * as ignored, and always ignores `node_modules/`, so those would pass with no
+ * ignore config at all.
+ */
+const unignored = new ESLint({ ignore: false });
+const lintableEntries: string[] = [];
+for (const entry of ignoredEntries) {
+  if (!(await unignored.isPathIgnored(probeFor(entry)))) {
+    lintableEntries.push(entry);
+  }
+}
+
 describe('lint ignores follow .gitignore', () => {
-  it('reads the directories it checks from .gitignore', () => {
-    expect(ignoredDirectories).toEqual(
+  it('checks the .gitignore entries ESLint would otherwise lint', () => {
+    expect(lintableEntries).toEqual(
       expect.arrayContaining([
-        'node_modules/',
         '.wrangler/',
         '.superpowers/',
         '.remember/',
+        'apps/sync-worker/worker-configuration.d.ts',
       ]),
     );
   });
 
-  it.each(ignoredDirectories)(
-    'ESLint skips TypeScript under %s',
-    async (directory) => {
-      const eslint = new ESLint();
-      expect(await eslint.isPathIgnored(`${directory}probe.ts`)).toBe(true);
-    },
-  );
+  it.each(lintableEntries)('ESLint skips %s', async (entry) => {
+    const eslint = new ESLint();
+    expect(await eslint.isPathIgnored(probeFor(entry))).toBe(true);
+  });
 });

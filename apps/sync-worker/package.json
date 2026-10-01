@@ -1,0 +1,14 @@
+{
+  "name": "@wordfarer/sync-worker",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "types": "wrangler types --strict-vars=false",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0"
+  }
+}
