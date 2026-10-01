@@ -1,0 +1,201 @@
+import type {
+  Cefr,
+  CourseData,
+  CultureCard,
+  Destination,
+  Encounter,
+  GrammarNode,
+  LexiconItem,
+  Region,
+} from '../src/course';
+import { createStreams, nextInt, type RngStreams } from '../src/rng';
+
+/**
+ * A generated course sized like v1 (parent §5.6, M1 design §6): the content
+ * the pacing bots play until M2's real courses exist.
+ *
+ * Per region: 4 destinations holding 150 lexicon items, 6 Encounters, 3 sets
+ * of 4 culture cards, and 4 grammar nodes with 2 roots and 3 derived words
+ * each. 10 tags are shared across the course. Coverage is built in, not
+ * hoped for: item i's first tag cycles through every tag, the Encounters of
+ * each region cover every tag, and every root has items. The seed varies the
+ * rest (second tags, card tags, derived words' tags).
+ *
+ * The Encounter cost and output ladder is a placeholder for the bots to tune
+ * in #35. Festival windows hang off the bots' wall-clock start, 2027-01-04
+ * 00:00 UTC (M1 design §2.3), so they fall on the same simulated days in
+ * every run.
+ */
+
+export const TAGS = [
+  'food',
+  'transport',
+  'greetings',
+  'market',
+  'family',
+  'numbers',
+  'ceremony',
+  'weather',
+  'work',
+  'travel',
+] as const;
+
+/** 2027-01-04 00:00 UTC, the pacing bots' wall-clock start. */
+export const BOT_EPOCH_WALL_MS = 1_799_020_800_000;
+
+const DAY_MS = 86_400_000;
+const REGIONS = 3;
+const DESTINATION_SIZES = [38, 38, 37, 37] as const;
+const ROOTS_PER_REGION = 8;
+const SETS = 3;
+const CARDS_PER_SET = 4;
+const GRAMMAR_NODES = 4;
+const DERIVED_PER_NODE = 3;
+
+/** Placeholder ladder: each Encounter costs 12x and yields 8x the one before. */
+const C0 = [10, 120, 1_440, 17_280, 207_360, 2_488_320] as const;
+const P0 = [0.5, 4, 32, 256, 2_048, 16_384] as const;
+/** Each region's Encounters are 1000x the previous region's. */
+const REGION_SCALE = [1, 1_000, 1_000_000] as const;
+
+const STREAMS = ['second-tags', 'card-tags', 'derived-tags'];
+
+function tag(index: number): string {
+  const t = TAGS[index % TAGS.length];
+  if (t === undefined) throw new RangeError(`no tag ${String(index)}`);
+  return t;
+}
+
+/** Draws a uniform integer in [0, n) from one named stream. */
+function drawer(seed: number): (stream: string, n: number) => number {
+  let streams: RngStreams = createStreams(seed, STREAMS);
+  return (stream, n) => {
+    const state = streams[stream];
+    if (state === undefined) throw new RangeError(`no stream ${stream}`);
+    const r = nextInt(state, n);
+    streams = { ...streams, [stream]: r.state };
+    return r.value;
+  };
+}
+
+function cefrAt(position: number, size: number): Cefr {
+  if (position * 3 < size) return 'A1';
+  if (position * 3 < size * 2) return 'A2';
+  return 'B1';
+}
+
+function region(
+  r: number,
+  draw: (stream: string, n: number) => number,
+): Region {
+  const roots = Array.from(
+    { length: ROOTS_PER_REGION },
+    (_, k) => `r${String(r)}-root-${String(k)}`,
+  );
+
+  let i = 0;
+  const destinations: Destination[] = DESTINATION_SIZES.map((size, d) => {
+    const lexicon: LexiconItem[] = [];
+    for (let p = 0; p < size; p++, i++) {
+      const first = tag(i + r);
+      const second =
+        draw('second-tags', 2) === 0
+          ? undefined
+          : tag(i + r + 1 + draw('second-tags', TAGS.length - 1));
+      const root = i % 5 === 0 ? roots[(i / 5) % ROOTS_PER_REGION] : undefined;
+      lexicon.push({
+        id: `r${String(r)}-d${String(d)}-w${String(p)}`,
+        tags: second === undefined ? [first] : [first, second],
+        cefr: cefrAt(p, size),
+        ...(root === undefined ? {} : { root }),
+      });
+    }
+    return { id: `r${String(r)}-d${String(d)}`, lexicon };
+  });
+
+  const scale = REGION_SCALE[r] ?? 1;
+  const encounters: Encounter[] = C0.map((c0, k) => ({
+    id: `r${String(r)}-e${String(k)}`,
+    tags: [tag(2 * k + r), tag(2 * k + 1 + r)],
+    c0: c0 * scale,
+    p0: (P0[k] ?? 0) * scale,
+  }));
+
+  const cardSets = Array.from({ length: SETS }, (_, s) => ({
+    id: `r${String(r)}-set-${String(s)}`,
+    bonus: 0.25,
+  }));
+  const cultureCards: CultureCard[] = [];
+  for (let s = 0; s < SETS; s++) {
+    for (let c = 0; c < CARDS_PER_SET; c++) {
+      const card: CultureCard = {
+        id: `r${String(r)}-card-${String(s)}-${String(c)}`,
+        setId: `r${String(r)}-set-${String(s)}`,
+        tags: [tag(draw('card-tags', TAGS.length))],
+        bonus: 0.05,
+      };
+      if (s === 0 && c === 0) {
+        // One festival card per region, live for a week this year and next.
+        const start = BOT_EPOCH_WALL_MS + (14 + 28 * r) * DAY_MS;
+        cultureCards.push({
+          ...card,
+          festival: {
+            windows: [
+              { startWallMs: start, endWallMs: start + 7 * DAY_MS },
+              {
+                startWallMs: start + 364 * DAY_MS,
+                endWallMs: start + 371 * DAY_MS,
+              },
+            ],
+          },
+        });
+      } else {
+        cultureCards.push(card);
+      }
+    }
+  }
+
+  const grammarNodes: GrammarNode[] = Array.from(
+    { length: GRAMMAR_NODES },
+    (_, g) => {
+      const nodeRoots = [roots[2 * g], roots[2 * g + 1]].filter(
+        (x): x is string => x !== undefined,
+      );
+      return {
+        id: `r${String(r)}-gram-${String(g)}`,
+        roots: nodeRoots,
+        derived: Array.from(
+          { length: DERIVED_PER_NODE },
+          (_, j): LexiconItem => {
+            const root = nodeRoots[j % nodeRoots.length];
+            return {
+              id: `r${String(r)}-gram-${String(g)}-w${String(j)}`,
+              tags: [tag(draw('derived-tags', TAGS.length))],
+              cefr: 'A2',
+              ...(root === undefined ? {} : { root }),
+            };
+          },
+        ),
+      };
+    },
+  );
+
+  return {
+    id: `r${String(r)}`,
+    destinations,
+    encounters,
+    cardSets,
+    cultureCards,
+    grammarNodes,
+  };
+}
+
+/** The synthetic course for a seed. The same seed always gives a deep-equal course. */
+export function syntheticCourse(seed: number): CourseData {
+  const draw = drawer(seed);
+  return {
+    id: `synthetic-${String(seed)}`,
+    tags: [...TAGS],
+    regions: Array.from({ length: REGIONS }, (_, r) => region(r, draw)),
+  };
+}

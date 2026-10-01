@@ -14,15 +14,18 @@
     "postinstall": "npm run types --workspace @wordfarer/sync-worker",
     "test:unit": "vitest run",
     "test:worker": "npm run test --workspace @wordfarer/sync-worker",
+    "test:engines": "playwright test -c playwright.engines.config.ts",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "notices": "node scripts/third-party-notices.ts"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
     "@eslint/js": "^10.0.0",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.0.0",
     "eslint": "^10.11.0",
     "eslint-plugin-svelte": "^3.23.0",
