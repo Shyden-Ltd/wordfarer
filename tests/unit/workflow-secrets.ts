@@ -34,7 +34,7 @@ export interface Scan {
 
 type Yaml = unknown;
 
-const isRecord = (value: Yaml): value is Record<string, Yaml> =>
+export const isRecord = (value: Yaml): value is Record<string, Yaml> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** Every string in a parsed YAML value, keys included. */
