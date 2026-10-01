@@ -27,3 +27,4 @@ export {
   type RngState,
   type RngStreams,
 } from './rng';
+export { BALANCE, type Balance, type Rank } from './balance';
