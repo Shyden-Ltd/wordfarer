@@ -28,6 +28,21 @@ export {
   type RngStreams,
 } from './rng';
 export { BALANCE, type Balance, type Rank } from './balance';
+export { encounterOutput, milestonesReached, purchaseCost } from './encounters';
+export { encounterRate, producedBetween } from './production';
+export {
+  advance,
+  buyEncounter,
+  integrate,
+  listen,
+  understandingNow,
+  view,
+  type AdvanceSummary,
+  type Rejection,
+  type Result,
+  type View,
+} from './sim';
+export { initialState, ownedCount, type Anchor, type GameState } from './state';
 export type {
   CardSet,
   Cefr,
