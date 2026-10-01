@@ -1,23 +1,28 @@
 # Handover: Wordfarer
 
-**Written:** 2026-10-01 13:05 UTC.
+**Written:** 2026-10-01 16:23 UTC.
 **Next session:** launch Claude from `~/Developer/Repos/wordfarer`. The session names itself "Wordfarer" by hook; type `/color green` once.
 
 ## State
 
-- **Repo:** `Shyden-Ltd/wordfarer`, public. Agent `gh`/`git` act as the `wordfarer-agent` App, which has no `secrets` permission.
-- **`develop`** = `c4a1c1f` (re-read it): PR #38 (#26, core foundations) merged as a merge commit, keeping its eight gated task commits. M1 (epic #6) In Progress.
-- **#26 done**: the plan `docs/superpowers/plans/2026-10-01-m1-26-core-foundations.md` was reviewed to zero in 13 passes (pass 12 found an untested `pickFile` tie-break: M1.12, two cases added, everything re-proved; pass 13 clean). CI run 36865626307 green on every step; deploy-dev run 36865931487 on `c4a1c1f` (see the AC evidence comment on #26 for its result).
-- **#39 filed** (Wordfarer board, Todo): dev on `dev.wordfarer.shyden.co.uk` + `dev-api.wordfarer.shyden.co.uk` behind the shared dev password, copied from shyden.co.uk/ShyTalk. Operator decisions (2026-10-01, asked interactively): **Basic auth replaces Cloudflare Access**; **the dev sync API stays ungated, noindex only**. The full comparison and 12 ACs are in the issue.
-- **The dev password value is never written anywhere** (public repo). Shyden enters it himself into the Worker secret `DEV_PASSWORD` (`wordfarer-web-dev`) and the GitHub `dev` environment secret `DEV_BASIC_AUTH_PASSWORD`.
-- **Method tooling** for planning by executed stages: `.superpowers/sdd/m1-26/` (git-ignored, on disk). Memory `feedback-plan-code-from-executed-stages` describes it; copy the scripts for the next ticket rather than editing these.
-- The scratch worktree `~/Developer/Repos/wordfarer-wt-26` (branch `scratch/m1-26-stages`) is no longer needed once #26 is Done: remove it with `git worktree remove`.
+- **Repo:** `Shyden-Ltd/wordfarer`, public. Agent `gh`/`git` act as the `wordfarer-agent` App, which has no `secrets` permission (listing environment secrets is a 403; read their names in the GitHub UI).
+- **`develop`** = `0e33a8a` (re-read it): PR #41 (#39 PR A: `packages/lockdown`, the gated dev web Worker, dev Custom Domains, the password verify) merged as a merge commit.
+- **#39 is In Progress, blocked on Shyden.** Deploy-dev run 36889267341 on `0e33a8a`: `test` and `deploy` passed; `verify` failed with `web: status 401 with the password, expected 200`. Every earlier check passed (401 + challenge without and with a wrong password, robots blocked). Measured since:
+  - The live web version `dea2ac71` (100% of traffic) binds `DEV_PASSWORD` (secret_text) and has a `fetch` handler, so the secret reached the Worker.
+  - Neither `basicAuthOk` nor `verify-dev.ts` trims or reshapes the password, so the Worker secret and the GitHub `dev` secret `DEV_BASIC_AUTH_PASSWORD` hold **different strings** (most likely a stray trailing newline or space in one).
+  - Shyden's browser got `NXDOMAIN` for `dev.wordfarer.shyden.co.uk`: his router (192.168.1.1) negatively cached the name before the Custom Domain existed. The zone's SOA negative TTL is 1800 s, so it clears within 30 min; 1.1.1.1 resolves it and the gate answers 401 + `Basic realm="Wordfarer Non-Prod"`.
+- **Operator steps done 2026-10-01:** the CI token "wordfarer dev deploy (Workers+D1)" now also has `shyden.co.uk - Workers Routes:Edit` (edited in Chrome with Shyden's in-session OK, summary read before saving). Both secrets exist by name.
+- **The dev password value is never written anywhere** (public repo), never typed by the agent, and never entered through a `!` command (that lands in the transcript).
+- **#27 planning started.** Scratch worktree `~/Developer/Repos/wordfarer-wt-27`, branch `scratch/m1-27-proto`, commit `c6555b4`: untested prototype modules `encounters.ts`, `production.ts`, `state.ts`, `sim.ts` in `packages/core/src`. Decisions so far: production is rate x time in #27 (the hour-bucket loop arrives with #28, whose per-word rates make buckets observable); `integrate` moves only the clocks, so AC6 holds bit-exactly; the AC2 bulk-vs-singles tolerance is derived from `Num.pow`'s documented bound (measured worst 2.9e-14 vs singles, 1.07e-13 vs a 60-digit reference, n <= 1000, k <= 300). No tests written yet.
+- **#39 PR B** (AC8 `workers_dev: false`, AC9 Access retirement) waits for a green verify. Its stage is in `~/Developer/Repos/wordfarer-wt-39` (`stage/m2-39`; `.superpowers/sdd/m2-39/` holds the tooling and `HANDOVER.next.md`).
 - **Board** (project 4, `PVT_kwDOEOcG584BlRWb`, "Wordfarer Stories"). Status field `PVTSSF_lADOEOcG584BlRWbzhj-3Hc`; options Todo `f75ad846`, In Progress `47fc9ee4`, Done `98236657`. #39 item `PVTI_lADOEOcG584BlRWbzg95_uA`. New issues are **not** auto-added: add by node id and assert the title.
 
 ## Resume steps
 
-1. `git fetch origin`; re-read `develop`'s head, #26's state and #39's board status. Don't trust this file.
-2. If #26 is not yet Done (its AC comment missing or the deploy not verified), finish it: deploy-dev run 36865931487 must show `deploy`, `verify` success and the `dev-verified` status on `c4a1c1f`.
-3. Plan #39 the #26 way (stages in a scratch worktree, red against stubs, predicted mutations, review to zero, self-approve). Port the lockdown module from shyden.co.uk `functions/_lib/lockdown.js` at `26b80e2` (read-only access to that repo and ShyTalk is authorised for this purpose only; never their boards or the roadmap). The web Worker needs a script with `run_worker_first: true` in its dev config.
-4. Before merging #39, Shyden must set both secrets; the plan gives him the exact commands (`! npx wrangler secret put DEV_PASSWORD --name wordfarer-web-dev`, and the GitHub environment secret in the UI). Access is retired only after the new verify is green on `develop`.
-5. Then #27 (encounters and the time model), planned the same way.
+1. `git fetch origin`; re-read `develop`'s head and #39's state. Don't trust this file.
+2. Ask Shyden (AskUserQuestion) for the login test: open `https://dev.wordfarer.shyden.co.uk` (phone on mobile data, or the laptop once the router's cache has expired), any username, the dev password.
+   - **Opens:** the GitHub `dev` secret is the wrong copy. Shyden re-pastes `DEV_BASIC_AUTH_PASSWORD` (Settings, Environments, dev, pencil) with nothing after the last character.
+   - **401:** the Worker secret is the wrong copy. Shyden re-runs `npx wrangler secret put DEV_PASSWORD --name wordfarer-web-dev` in **his own terminal**, typing or pasting at the prompt.
+3. Re-run the failed job: `gh run rerun 36889267341 --failed`. Wait in the background, then read every job and step by name, and confirm the `dev-verified` status on `0e33a8a`.
+4. Then follow the #39 plan's "Finishing" from step 5: AC evidence on #39, PR B (cherry-pick `stage-t5` with trailers), the AC8 probe, AC9 Access retirement, this file, #39 to Done.
+5. #27: write the tests in `wordfarer-wt-27` against the prototype, then plan it the #26 way (stages, red against stubs, predicted mutations, review to zero, self-approve). Tooling to copy: `.superpowers/sdd/m2-39/`.
