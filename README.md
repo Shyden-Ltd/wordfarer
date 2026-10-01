@@ -30,6 +30,8 @@ npm run build
 
 Every change follows test-driven development, and each ticket gets its own branch with a PR into `develop`. Third-party GitHub Actions are pinned to full commit SHAs, Dependabot opens its PRs against `develop`, and `tests/unit/supply-chain.test.ts` enforces both.
 
+Every merge to `develop` deploys dev (web and sync Workers, D1) behind Cloudflare Access, and is verified live before it is marked `dev-verified`.
+
 ## Licences
 
 | What                                                           | Licence                                         |

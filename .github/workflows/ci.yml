@@ -3,11 +3,14 @@
 # push to that action's repo; the SHA is the only immutable reference. The
 # comment is what makes a Dependabot bump reviewable by a human rather than an
 # opaque hex swap -- so never remove it, and never let it drift from the SHA.
+#
+# Runs on every PR (the required `build-and-test` check) and is called by
+# deploy-dev.yml before each dev deploy, so develop never deploys a tree that
+# has not passed here.
 name: build-and-test
 on:
   pull_request:
-  push:
-    branches: [develop]
+  workflow_call:
 
 permissions:
   contents: read
