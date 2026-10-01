@@ -16,3 +16,14 @@ export {
   type SimMs,
   type WallMs,
 } from './clock';
+export {
+  createStreams,
+  drawFrom,
+  nextFloat,
+  nextInt,
+  nextU32,
+  seedRng,
+  type Draw,
+  type RngState,
+  type RngStreams,
+} from './rng';
