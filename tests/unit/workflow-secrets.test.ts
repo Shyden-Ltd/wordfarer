@@ -151,8 +151,8 @@ describe('this repo’s workflows keep every secret inside an environment', () =
     );
     expect(
       references,
-      'deploy-dev.yml reads four Cloudflare secrets',
-    ).toBeGreaterThanOrEqual(4);
+      'deploy-dev.yml reads two Cloudflare secrets and the dev password',
+    ).toBeGreaterThanOrEqual(3);
   });
 
   it('no secret is read outside a protected environment', () => {

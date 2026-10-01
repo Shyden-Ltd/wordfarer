@@ -1,6 +1,7 @@
 # Deploys develop to the dev environment on every merge (spec §13): D1
-# migrations, then the sync Worker, then the web app (a static-assets Worker,
-# spec D9), then a verify that reads all three back from the live URLs.
+# migrations, then the sync Worker, then the web app (a static-assets Worker
+# with the password gate in front, spec D9 and #39), then a verify that reads
+# all three back from the live Custom Domains.
 #
 # Every Cloudflare secret is a `dev` ENVIRONMENT secret, and `dev` admits only
 # the develop branch, so a fork PR or any other branch cannot reach them
@@ -28,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: dev
-      url: https://wordfarer-web-dev.shyden1988uk.workers.dev
+      url: https://dev.wordfarer.shyden.co.uk
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -59,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: dev
-      url: https://wordfarer-web-dev.shyden1988uk.workers.dev
+      url: https://dev.wordfarer.shyden.co.uk
     permissions:
       contents: read
       statuses: write
@@ -68,13 +69,12 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: '.nvmrc'
-      - name: Verify dev is gated, serves this commit, and D1 answers
+      - name: Verify dev is password-gated, serves this commit, and D1 answers
         env:
-          DEV_WEB_URL: https://wordfarer-web-dev.shyden1988uk.workers.dev/
-          DEV_SYNC_URL: https://wordfarer-sync-dev.shyden1988uk.workers.dev
+          DEV_WEB_URL: https://dev.wordfarer.shyden.co.uk/
+          DEV_SYNC_URL: https://dev-api.wordfarer.shyden.co.uk
           EXPECTED_SHA: ${{ github.sha }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          DEV_BASIC_AUTH_PASSWORD: ${{ secrets.DEV_BASIC_AUTH_PASSWORD }}
         run: node scripts/verify-dev.ts
       - name: Post dev-verified on the deployed commit
         env:
@@ -82,5 +82,5 @@ jobs:
         run: >-
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
           -f state=success -f context=dev-verified
-          -f description="Live on dev: gated, this commit, D1 answers"
+          -f description="Live on dev: password-gated, this commit, D1 answers"
           -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

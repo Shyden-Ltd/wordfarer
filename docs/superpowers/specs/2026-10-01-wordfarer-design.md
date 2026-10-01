@@ -49,6 +49,8 @@ The operator's choices from brainstorming, recorded so no later session re-litig
 | D16 | Name                  | **Wordfarer** (trademark clearance is a pre-launch task)                                                                                                                                                                                                                                                                                                                                                                                           |
 | D17 | Openness and licences | **Public, open-source repository** (operator 2026-10-01 01:01 UTC: "all new repos will usually be open-source and public and transparent"). Code **Apache-2.0**. Content is licensed **per item** (01:03 and 02:59 UTC): adapted from CC BY-SA sources → **CC BY-SA 4.0**; original writing and art (story, culture cards, motifs, original examples) → **CC BY-NC-SA 4.0**. The Wordfarer name and logo are **reserved trademarks**, not licensed |
 
+**D9 amended 2026-10-01 (#39):** dev is served at `dev.wordfarer.shyden.co.uk` (web) and `dev-api.wordfarer.shyden.co.uk` (sync) as Workers Custom Domains, behind the shared Shyden Ltd dev password, which replaced Cloudflare Access. See §6.7.
+
 ## 3. Core loop
 
 Numbers are **starting values for balance testing**, not commitments (operator: "approve, tweak numbers later"). Every one lives in a single `balance.ts` table, and the pacing bots (§12.2) guard the outcomes rather than the constants.
@@ -246,6 +248,8 @@ A single `Platform` interface: `storage`, `notifications`, `achievements`, `enti
 ### 6.7 Worker and D1 data model (initial)
 
 `players`, `devices`, `saves` (+ `save_versions`, max 5), `pairings`, `ranked_batches`, `ranked_state` (server-replayed checkpoint per player and course), `leaderboard_entries`, `names` (+ `name_holds`), `reports`, `flags`, `grants`, `staff`, `audit_log`, `deletion_requests`. Migrations are SQL files under `apps/sync-worker/migrations`.
+
+**Hostnames and the dev gate (#39).** Production is `wordfarer.shyden.co.uk` (web) and `api.wordfarer.shyden.co.uk` (sync), attached by the production pipeline. Dev is `dev.wordfarer.shyden.co.uk` and `dev-api.wordfarer.shyden.co.uk`, Workers Custom Domains on the `shyden.co.uk` zone, declared in each `wrangler.jsonc`. `packages/lockdown` (ported from shyden.co.uk's `functions/_lib/lockdown.js`, which ShyTalk shares) passes the production hostnames through untouched. On any other host the web Worker serves a blocking `robots.txt` publicly and demands HTTP Basic auth against one shared password (`run_worker_first`, so no asset is served without it), failing closed when the password is unset; the sync API is not password-gated, because native apps cannot answer a browser challenge, and carries `X-Robots-Tag: noindex, nofollow, noarchive` only. The password lives in two places only, both entered by the operator: the Worker secret `DEV_PASSWORD` on `wordfarer-web-dev`, and the GitHub `dev` environment secret `DEV_BASIC_AUTH_PASSWORD`, which the deploy's verify job reads.
 
 **Plan note:** server replay needs more CPU than the Workers Free plan's 10 ms per request, so the **Workers Paid plan** (about $5/month) is a launch prerequisite.
 
