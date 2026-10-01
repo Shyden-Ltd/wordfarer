@@ -18,6 +18,7 @@ const ROOT = new URL('../..', import.meta.url).pathname;
 interface DeployConfig {
   name: string;
   main: string | undefined;
+  workers_dev: unknown;
   routes: unknown;
   assets: Record<string, unknown> | undefined;
   vars: Record<string, unknown>;
@@ -29,14 +30,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 function readDeployConfig(path: string): DeployConfig {
   const raw: unknown = unstable_readConfig({ config: path });
   if (!isRecord(raw)) throw new Error(`${path}: not a config object`);
-  const { name, main, routes, assets, vars } = raw;
+  const { name, main, workers_dev, routes, assets, vars } = raw;
   if (typeof name !== 'string') throw new Error(`${path}: no name`);
   if (main !== undefined && typeof main !== 'string')
     throw new Error(`${path}: main is not a path`);
   if (assets !== undefined && !isRecord(assets))
     throw new Error(`${path}: assets is not an object`);
   if (!isRecord(vars)) throw new Error(`${path}: vars is not an object`);
-  return { name, main, routes, assets, vars };
+  return { name, main, workers_dev, routes, assets, vars };
 }
 
 /** Every wrangler config in the repo, found on disk rather than listed. */
@@ -83,6 +84,15 @@ describe('the dev Workers’ deploy configs', () => {
   it('serves the sync Worker at its dev Custom Domain', () => {
     expect(byName('wordfarer-sync-dev').routes).toEqual([
       { pattern: 'dev-api.wordfarer.shyden.co.uk', custom_domain: true },
+    ]);
+  });
+
+  it('serves each dev Worker at its Custom Domain only, never on workers.dev', () => {
+    expect(
+      configs.map(({ config }) => [config.name, config.workers_dev]).sort(),
+    ).toEqual([
+      ['wordfarer-sync-dev', false],
+      ['wordfarer-web-dev', false],
     ]);
   });
 
