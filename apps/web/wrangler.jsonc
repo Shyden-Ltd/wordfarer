@@ -11,7 +11,9 @@
   "name": "wordfarer-web-dev",
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-30",
-  "workers_dev": true,
+  // Served only at its Custom Domain (#39): the *.workers.dev address would
+  // be a second way in, outside the hostname the gate and the verify know.
+  "workers_dev": false,
   "preview_urls": false,
   "routes": [
     { "pattern": "dev.wordfarer.shyden.co.uk", "custom_domain": true },
