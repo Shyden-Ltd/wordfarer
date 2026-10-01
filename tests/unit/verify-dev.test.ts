@@ -52,6 +52,14 @@ describe('gateProblems', () => {
     ]);
   });
 
+  it('refuses a relative redirect, which stays on the same host', () => {
+    expect(
+      gateProblems('web', probe(302, '', '/cdn-cgi/access/login')),
+    ).toEqual([
+      'web: redirects to /cdn-cgi/access/login, not to Cloudflare Access',
+    ]);
+  });
+
   it('fails when the site answers 200 to an anonymous request', () => {
     expect(gateProblems('sync', probe(200))).toEqual([
       'sync: answered 200 without a service token; the Access gate is not in front of it',
@@ -118,6 +126,7 @@ describe('verifyDev', () => {
   let served = SHA;
   let gated = true;
   let requests = 0;
+  let dropAuthorised = 0;
 
   beforeAll(async () => {
     server = createServer((req, res) => {
@@ -125,6 +134,11 @@ describe('verifyDev', () => {
       const authorised =
         req.headers['cf-access-client-id'] === 'id' &&
         req.headers['cf-access-client-secret'] === 'secret';
+      if (authorised && dropAuthorised > 0) {
+        dropAuthorised -= 1;
+        req.socket.destroy();
+        return;
+      }
       if (gated && !authorised) {
         res.writeHead(302, {
           location: 'https://team.cloudflareaccess.com/cdn-cgi/access/login',
@@ -191,5 +205,33 @@ describe('verifyDev', () => {
     ]);
     expect(requests, 'two gate probes plus three attempts of two').toBe(8);
     served = SHA;
+  });
+
+  it('retries through a dropped connection instead of giving up', async () => {
+    served = SHA;
+    gated = true;
+    requests = 0;
+    dropAuthorised = 1;
+    expect(await verifyDev(target(), { attempts: 3, delayMs: 0 })).toEqual([]);
+    expect(requests, 'two gate probes, a dropped attempt, a clean one').toBe(6);
+  });
+
+  it('reports an unreachable host as a problem, never a crash', async () => {
+    const closed = createServer();
+    await new Promise<void>((resolve) =>
+      closed.listen(0, '127.0.0.1', resolve),
+    );
+    const port = String((closed.address() as AddressInfo).port);
+    await new Promise((resolve) => closed.close(resolve));
+    const unreachable = `http://127.0.0.1:${port}/`;
+    const problems = await verifyDev(
+      { ...target(), webUrl: unreachable },
+      { attempts: 1, delayMs: 0 },
+    );
+    expect(problems).toEqual([
+      expect.stringMatching(
+        new RegExp(`^web: request to ${unreachable} failed: `),
+      ),
+    ]);
   });
 });

@@ -34,8 +34,11 @@ const ACCESS_LOGIN_HOST = /\.cloudflareaccess\.com$/;
 export function gateProblems(label: string, probe: Probe): string[] {
   if (probe.status === 401 || probe.status === 403) return [];
   if (probe.status === 302 || probe.status === 303) {
+    // A relative Location stays on the same host, so it is never Access.
     const host =
-      probe.location === null ? '' : new URL(probe.location).hostname;
+      probe.location !== null && URL.canParse(probe.location)
+        ? new URL(probe.location).hostname
+        : '';
     return ACCESS_LOGIN_HOST.test(host)
       ? []
       : [
@@ -87,14 +90,35 @@ async function probe(
   };
 }
 
+/**
+ * Probes `url` and judges the answer. A request that fails outright (a dropped
+ * connection, DNS not yet resolving a new hostname) is a problem like any other,
+ * so the retry loop retries it and the report names it instead of crashing.
+ */
+async function check(
+  label: string,
+  url: string,
+  headers: Record<string, string>,
+  judge: (probe: Probe) => string[],
+): Promise<string[]> {
+  let answer: Probe;
+  try {
+    answer = await probe(url, headers);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return [`${label}: request to ${url} failed: ${reason}`];
+  }
+  return judge(answer);
+}
+
 export async function verifyDev(
   target: Target,
   { attempts, delayMs }: { attempts: number; delayMs: number },
 ): Promise<string[]> {
   const healthUrl = new URL('/health', target.syncUrl).href;
   const gate = [
-    ...gateProblems('web', await probe(target.webUrl)),
-    ...gateProblems('sync', await probe(healthUrl)),
+    ...(await check('web', target.webUrl, {}, (p) => gateProblems('web', p))),
+    ...(await check('sync', healthUrl, {}, (p) => gateProblems('sync', p))),
   ];
   if (gate.length > 0) return gate;
 
@@ -105,8 +129,12 @@ export async function verifyDev(
   let problems: string[] = [];
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     problems = [
-      ...webProblems(await probe(target.webUrl, token), target.sha),
-      ...healthProblems(await probe(healthUrl, token), target.sha),
+      ...(await check('web', target.webUrl, token, (p) =>
+        webProblems(p, target.sha),
+      )),
+      ...(await check('sync', healthUrl, token, (p) =>
+        healthProblems(p, target.sha),
+      )),
     ];
     if (problems.length === 0) return [];
     if (attempt < attempts)
