@@ -58,11 +58,11 @@ Numbers are **starting values for balance testing**, not commitments (operator: 
 
 ### 3.1 Currencies (at most 3 visible per layer, DN8)
 
-| Currency        | Symbol | Earned by                               | Spent on                                                               |
-| --------------- | ------ | --------------------------------------- | ---------------------------------------------------------------------- |
-| Understanding   | 💬     | Encounters, every second                | Encounters, picking up Words                                           |
-| Insight         | ✨     | **Only** correct answers to due reviews | Upgrades, journey slots, name changes after the free one               |
-| Passport Stamps | 🛂     | Set Sail (prestige)                     | Permanent stamp upgrades; each stamp also gives +10% global production |
+| Currency        | Symbol | Earned by                               | Spent on                                                                                               |
+| --------------- | ------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Understanding   | 💬     | Encounters, every second                | Encounters, picking up Words                                                                           |
+| Insight         | ✨     | **Only** correct answers to due reviews | Upgrades, journey slots, name changes after the free one                                               |
+| Passport Stamps | 🛂     | Set Sail (prestige)                     | Permanent stamp upgrades; each stamp ever earned also gives +10% global production, spent or not (#29) |
 
 ### 3.2 Encounters (generators)
 
