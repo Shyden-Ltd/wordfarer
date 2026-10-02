@@ -60,13 +60,12 @@ describe('purchaseCost (AC2)', () => {
     );
   });
 
-  it('the n-th purchase costs c0 x 1.15^n, n = 0..2000', () => {
-    for (let owned = 0; owned <= 2000; owned++) {
+  for (let owned = 0; owned <= 2000; owned++)
+    it(`the purchase after ${String(owned)} owned costs c0 x 1.15^${String(owned)}`, () => {
       const want = exactCost(tea.c0, owned, 1);
       const got = purchaseCost(tea, owned, 1);
       expect(relativeError(got, want)).toBeLessThan(costBound(owned, 1, want));
-    }
-  });
+    });
 
   it('buying k uses the geometric series closed form', () => {
     fc.assert(
