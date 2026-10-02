@@ -116,6 +116,21 @@ ${call}('t', () => {
       ).toEqual([{ test: 't', loop: 'for (const c of CASES)', line: 3 }]);
     });
 
+  const SIGNATURES: readonly (readonly [string, string, string])[] = [
+    ['options before the body', "it('t', { timeout: 60_000 }, () => {", '});'],
+    ['a timeout after the body', "it('t', () => {", '}, 60_000);'],
+    ['options after the body', "it('t', () => {", '}, { timeout: 60_000 });'],
+  ];
+  for (const [what, open, close] of SIGNATURES)
+    it(`finds the body of a test given ${what}`, () => {
+      expect(
+        found(`
+${open}
+  for (const c of CASES) expect(c).toBe(1);
+${close}`),
+      ).toEqual([{ test: 't', loop: 'for (const c of CASES)', line: 3 }]);
+    });
+
   const ALLOWED: readonly (readonly [string, string])[] = [
     [
       'a loop that generates one test per case',

@@ -63,14 +63,17 @@ const isTestCall = (call: ts.CallExpression): boolean => {
   );
 };
 
+/**
+ * A test's body: its first function argument. Not its last, since Vitest
+ * takes a timeout or options after the body as well as before it.
+ */
 const callbackOf = (
   call: ts.CallExpression,
-): ts.ArrowFunction | ts.FunctionExpression | null => {
-  const last = call.arguments[call.arguments.length - 1];
-  return last && (ts.isArrowFunction(last) || ts.isFunctionExpression(last))
-    ? last
-    : null;
-};
+): ts.ArrowFunction | ts.FunctionExpression | null =>
+  call.arguments.find(
+    (arg): arg is ts.ArrowFunction | ts.FunctionExpression =>
+      ts.isArrowFunction(arg) || ts.isFunctionExpression(arg),
+  ) ?? null;
 
 /** A title as written: a template keeps its `${…}`, so an entry naming it is stable. */
 const titleOf = (sf: ts.SourceFile, call: ts.CallExpression): string => {
