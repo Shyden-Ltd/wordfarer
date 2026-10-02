@@ -37,6 +37,7 @@ import {
 } from '../src/sim';
 import { initialState, pickedWord, type GameState } from '../src/state';
 import { pickUpCost, wordBonus } from '../src/words';
+import { exactMean, exactR } from './fsrs-reference';
 
 /**
  * Words, ranks and FSRS review in the game (#28 AC1, AC2, AC4 to AC9).
@@ -143,66 +144,60 @@ function played(): GameState {
 }
 
 /** Exact R of a word at wall time `wall`, straight from the curve. */
-function exactR(word: WordMemory, wall: Decimal): Decimal {
+function exactWordR(word: WordMemory, wall: Decimal): Decimal {
   const { lastReview, stability } = word.card;
   if (lastReview === null) return new D(0);
-  const d = new D(0.1542);
-  const f = new D('0.9').pow(new D(-1).div(d)).minus(1);
-  const t = wall.minus(lastReview).div(DAY_MS);
-  return f.mul(t).div(stability).plus(1).pow(d.neg());
+  return exactR(stability, wall.minus(lastReview).div(DAY_MS));
 }
 
 /**
  * The continuous model's Understanding over sim [from, to), in decimal:
  * for each owned Encounter, output x (1 + sum of rankBonus x (0.5 + 0.5 R))
- * over the words sharing a tag, R taken on the wall clock (sim + skew),
- * integrated by Simpson's rule on 2,000 panels. R is smooth over an hour,
- * so the rule's error is far below the 1e-12 the test asks for.
+ * over the words sharing a tag, R taken on the wall clock (sim + skew).
+ * The rate is linear in each word's R, so the integral is exact: each
+ * Encounter's output times the span, plus, per word sharing a tag, its bonus
+ * times half the span and half R's integral, which is closed form.
+ *
+ * Measured for #76: the 60-digit result agrees with a 120-digit run in all
+ * 45 digits compared, and the Simpson's rule over 2,000 panels it replaces
+ * to 4.5e-23 or better. Each of the four tests that call it takes
+ * 6 to 11 ms alone, against 2.8 to 4.6 s with Simpson's rule, and up to
+ * 118 ms over ten full-suite runs, so they run under the global timeout.
  */
 function continuous(state: GameState, from: number, to: number): Decimal {
   const skew = state.wall - state.sim;
-  const panels = 2000;
-  const h = new D(to - from).div(panels);
-  const words = Object.entries(state.words).map(([id, word]) => ({
-    word,
-    tags: lexicon.find((x) => x.id === id)?.tags ?? [],
-  }));
-  const rateAtSim = (t: Decimal): Decimal => {
-    // Each word's R is taken once per instant and shared by every encounter.
-    const bonus = words.map(({ word, tags }) => ({
-      tags,
+  const span = new D(to - from);
+  // Each word's term is integrated once and shared by every Encounter.
+  const terms = Object.entries(state.words).map(([id, word]) => {
+    const { lastReview, stability } = word.card;
+    const integralOfR =
+      lastReview === null
+        ? new D(0)
+        : exactMean(
+            stability,
+            new D(from + skew - lastReview).div(DAY_MS),
+            span.div(DAY_MS),
+          ).mul(span);
+    return {
+      tags: lexicon.find((x) => x.id === id)?.tags ?? [],
       value: new D(BALANCE.words.rankBonus[word.rank]).mul(
-        exactR(word, t.plus(skew)).mul(0.5).plus(0.5),
+        span.plus(integralOfR).mul(0.5),
       ),
-    }));
-    let total = new D(0);
-    for (const e of [tea, bus, stall]) {
-      const owned = state.owned[e.id] ?? 0;
-      if (owned === 0) continue;
-      let m = new D(1);
-      for (const { tags, value } of bonus) {
-        if (tags.some((g) => e.tags.includes(g))) m = m.plus(value);
-      }
-      total = total.plus(new D(Num.toNumber(encounterOutput(e, owned))).mul(m));
+    };
+  });
+  let total = new D(0);
+  for (const e of [tea, bus, stall]) {
+    const owned = state.owned[e.id] ?? 0;
+    if (owned === 0) continue;
+    let m = span;
+    for (const { tags, value } of terms) {
+      if (tags.some((g) => e.tags.includes(g))) m = m.plus(value);
     }
-    return total;
-  };
-  let sum = new D(0);
-  for (let k = 0; k <= panels; k++) {
-    const weight = k === 0 || k === panels ? 1 : k % 2 === 1 ? 4 : 2;
-    sum = sum.plus(rateAtSim(h.mul(k).plus(from)).mul(weight));
+    total = total.plus(new D(Num.toNumber(encounterOutput(e, owned))).mul(m));
   }
-  return sum.mul(h).div(3).div(1000);
+  return total.div(1000);
 }
 
-// `continuous` takes Simpson's rule over 2,000 panels in decimal.js: 6.6 s
-// measured inside the full core suite (#28), against 0 ms for the code under
-// test. Measured again for #72: 3413 to 6054 ms alone (the clipped return is
-// slowest, over 5 s with nothing else running), and up to 24850 ms over ten
-// loaded full-suite runs. The bound under test is accuracy, so a 5 s timeout
-// would guard only the machine's load (the same reasoning as
-// det-math.test.ts).
-const REFERENCE_TIMEOUT_MS = 60_000;
 // The random-sequence property replays 300 games through the real actions:
 // 5.8 s measured inside the full core suite; 4086 to 5182 ms alone and up to
 // 11734 ms over ten loaded full-suite runs (#72).
@@ -334,60 +329,48 @@ describe('the word bonus (AC2)', () => {
     );
   });
 
-  it(
-    'over a whole hour with no event, production equals the continuous model to 1e-12',
-    { timeout: REFERENCE_TIMEOUT_MS },
-    () => {
-      const s = played();
-      const h = bucketStart(simMs(s.sim + HOUR_MS));
-      const later = integrate(s, h - s.sim);
-      const want = continuous(later, h, h + HOUR_MS);
-      const got = Num.toNumber(
-        producedBetween(course, later, h, simMs(h + HOUR_MS)),
-      );
-      expect(relative(got, want)).toBeLessThan(1e-12);
-      // Liveness: the words move production, so a word-blind rate would fail.
-      const blind = { ...later, words: {} };
-      expect(
-        relative(
-          Num.toNumber(producedBetween(course, blind, h, simMs(h + HOUR_MS))),
-          want,
-        ),
-      ).toBeGreaterThan(1e-3);
-    },
-  );
+  it('over a whole hour with no event, production equals the continuous model to 1e-12', () => {
+    const s = played();
+    const h = bucketStart(simMs(s.sim + HOUR_MS));
+    const later = integrate(s, h - s.sim);
+    const want = continuous(later, h, h + HOUR_MS);
+    const got = Num.toNumber(
+      producedBetween(course, later, h, simMs(h + HOUR_MS)),
+    );
+    expect(relative(got, want)).toBeLessThan(1e-12);
+    // Liveness: the words move production, so a word-blind rate would fail.
+    const blind = { ...later, words: {} };
+    expect(
+      relative(
+        Num.toNumber(producedBetween(course, blind, h, simMs(h + HOUR_MS))),
+        want,
+      ),
+    ).toBeGreaterThan(1e-3);
+  });
 
-  it(
-    'across three hour boundaries, production equals the continuous model to 1e-12',
-    { timeout: REFERENCE_TIMEOUT_MS },
-    () => {
-      // Whole hours only: each hour runs at its own mean, which equals the
-      // exact integral over a whole bucket, so a span using one hour's rate
-      // for all three (no bucket split) is off by R's decay across them.
-      const s = played();
-      const h = bucketStart(simMs(s.sim + HOUR_MS));
-      const later = integrate(s, h - s.sim);
-      const got = Num.toNumber(
-        producedBetween(course, later, h, simMs(h + 3 * HOUR_MS)),
-      );
-      expect(relative(got, continuous(later, h, h + 3 * HOUR_MS))).toBeLessThan(
-        1e-12,
-      );
-    },
-  );
+  it('across three hour boundaries, production equals the continuous model to 1e-12', () => {
+    // Whole hours only: each hour runs at its own mean, which equals the
+    // exact integral over a whole bucket, so a span using one hour's rate
+    // for all three (no bucket split) is off by R's decay across them.
+    const s = played();
+    const h = bucketStart(simMs(s.sim + HOUR_MS));
+    const later = integrate(s, h - s.sim);
+    const got = Num.toNumber(
+      producedBetween(course, later, h, simMs(h + 3 * HOUR_MS)),
+    );
+    expect(relative(got, continuous(later, h, h + 3 * HOUR_MS))).toBeLessThan(
+      1e-12,
+    );
+  });
 
-  it(
-    'after a review mid-hour, production to the hour’s end equals the continuous model',
-    { timeout: REFERENCE_TIMEOUT_MS },
-    () => {
-      let s = played();
-      s = integrate(s, HOUR_MS - (s.sim % HOUR_MS) + 1_234_567);
-      s = ok(answerReview(course, s, 'a1-bus', false));
-      const end = bucketStart(s.sim) + HOUR_MS;
-      const got = Num.toNumber(producedBetween(course, s, s.sim, simMs(end)));
-      expect(relative(got, continuous(s, s.sim, end))).toBeLessThan(1e-12);
-    },
-  );
+  it('after a review mid-hour, production to the hour’s end equals the continuous model', () => {
+    let s = played();
+    s = integrate(s, HOUR_MS - (s.sim % HOUR_MS) + 1_234_567);
+    s = ok(answerReview(course, s, 'a1-bus', false));
+    const end = bucketStart(s.sim) + HOUR_MS;
+    const got = Num.toNumber(producedBetween(course, s, s.sim, simMs(end)));
+    expect(relative(got, continuous(s, s.sim, end))).toBeLessThan(1e-12);
+  });
 
   it('keeps each word’s mean over the hour through a purchase', () => {
     let s = played();
@@ -664,33 +647,27 @@ describe('memory ages on the wall clock (AC9)', () => {
     );
     expect(item?.retrievability).toBe(wordRetrievability(word, now));
     expect(
-      relative(item?.retrievability ?? 0, exactR(word, new D(now))),
+      relative(item?.retrievability ?? 0, exactWordR(word, new D(now))),
     ).toBeLessThan(1e-13);
   });
 
-  it(
-    'after a clipped return mid-hour, production to the hour’s end equals the continuous model',
-    { timeout: REFERENCE_TIMEOUT_MS },
-    () => {
-      let s = played();
-      s = integrate(s, HOUR_MS - (s.sim % HOUR_MS) + 1_234_567);
-      const { state: back, summary } = advance(
-        course,
-        s,
-        wallMs(s.wall + 30 * DAY_MS),
-      );
-      expect(summary.clipped).toBe(true);
-      // The cap is whole hours, so the clip lands 1,234,567 ms into an hour.
-      expect(back.sim % HOUR_MS).toBe(1_234_567);
-      const end = bucketStart(back.sim) + HOUR_MS;
-      const got = Num.toNumber(
-        producedBetween(course, back, back.sim, simMs(end)),
-      );
-      expect(relative(got, continuous(back, back.sim, end))).toBeLessThan(
-        1e-12,
-      );
-    },
-  );
+  it('after a clipped return mid-hour, production to the hour’s end equals the continuous model', () => {
+    let s = played();
+    s = integrate(s, HOUR_MS - (s.sim % HOUR_MS) + 1_234_567);
+    const { state: back, summary } = advance(
+      course,
+      s,
+      wallMs(s.wall + 30 * DAY_MS),
+    );
+    expect(summary.clipped).toBe(true);
+    // The cap is whole hours, so the clip lands 1,234,567 ms into an hour.
+    expect(back.sim % HOUR_MS).toBe(1_234_567);
+    const end = bucketStart(back.sim) + HOUR_MS;
+    const got = Num.toNumber(
+      producedBetween(course, back, back.sim, simMs(end)),
+    );
+    expect(relative(got, continuous(back, back.sim, end))).toBeLessThan(1e-12);
+  });
 });
 
 describe('no reachable state holds NaN, a negative or an infinite value', () => {
