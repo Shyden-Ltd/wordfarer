@@ -115,7 +115,9 @@ describe('the rights holder is Shyden Labs (Refs #49)', () => {
 
   it('NOTICE, TRADEMARKS.md and LICENSE-CONTENT.md name Shyden Labs', () => {
     const notice = readFileSync('NOTICE', 'utf8');
-    expect(notice).toContain('Copyright 2026 Shyden Labs (https://shyden.co.uk)');
+    expect(notice).toContain(
+      'Copyright 2026 Shyden Labs (https://shyden.co.uk)',
+    );
     expect(notice).toContain('trademarks of Shyden Labs and are not licensed');
 
     const marks = readFileSync('TRADEMARKS.md', 'utf8');

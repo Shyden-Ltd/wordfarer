@@ -1,6 +1,6 @@
 # Wordfarer: project instructions
 
-Wordfarer is a cross-platform idle game for learning a real language: English speakers learning Indonesian (`en-id`) and Indonesian speakers learning English (`id-en`). It is built once for web and shipped to browsers (PWA), Steam (Electron) and mobile (Capacitor), owned by Shyden Ltd.
+Wordfarer is a cross-platform idle game for learning a real language: English speakers learning Indonesian (`en-id`) and Indonesian speakers learning English (`id-en`). It is built once for web and shipped to browsers (PWA), Steam (Electron) and mobile (Capacitor), owned by Shyden Labs.
 
 The global `~/.claude/CLAUDE.md` rules all apply here. This file adds what is specific to this repo.
 
@@ -12,8 +12,8 @@ The global `~/.claude/CLAUDE.md` rules all apply here. This file adds what is sp
 
 ## Boundaries
 
-- **Board:** "Wordfarer Stories", a GitHub Project owned by Shyden-Ltd. Its node id is recorded below once created. Resolve the board from that node id and assert its **title** before any write. **Never** touch project #1 (ShyTalk Stories), project #2 (Shyden Site), project #3 (ShyFerry Stories), or the ShyTalk roadmap.
-  - Board node id: `PVT_kwDOEOcG584BlRWb` (Shyden-Ltd project **4**, title "Wordfarer Stories", read back 2026-10-01 00:50 UTC)
+- **Board:** "Wordfarer Stories", a GitHub Project owned by shyden-labs. Its node id is recorded below once created. Resolve the board from that node id and assert its **title** before any write. **Never** touch project #1 (ShyTalk Stories), project #2 (Shyden Site), project #3 (ShyFerry Stories), or the ShyTalk roadmap.
+  - Board node id: `PVT_kwDOEOcG584BlRWb` (shyden-labs project **4**, title "Wordfarer Stories", read back 2026-10-02 00:13 UTC after the org rename, #49)
 - **Git identity:** agent git acts through a per-repo GitHub App (`wordfarer-agent`, see HANDOVER step 1). Until it exists, `git fetch`/`push` refuse by design. Never route around the credential helper. Commits are authored as Shyden.
 
 ## Flow

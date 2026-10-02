@@ -5,7 +5,7 @@
 
 ## State
 
-- **Repo:** `Shyden-Ltd/wordfarer`, public. Agent `gh`/`git` act as the `wordfarer-agent` App, which has no `secrets` permission (listing environment secrets is a 403; read their names in the GitHub UI).
+- **Repo:** `shyden-labs/wordfarer`, public. Agent `gh`/`git` act as the `wordfarer-agent` App, which has no `secrets` permission (listing environment secrets is a 403; read their names in the GitHub UI).
 - **`develop`** = the merge of this handover, on top of `90981d4` (PR #46, #44). Re-read it.
 - **#44 is merged** (PR #46). Every job has `timeout-minutes` (`build-and-test` 15, `deploy` 10, `verify` 10). `build-and-test` runs in `mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30…` as `--user 1001`, so no step `apt-get`s any more. The decision rests on probe run 36923761040 (table on #44): `--with-deps` took 54–371 s, no-deps cannot launch WebKit, and the image takes 27–43 s to pull. AC2 and AC4 were revised on the issue to match. Guards: `tests/unit/workflow-timeouts.ts` (parsed YAML), `supply-chain.test.ts` (image digest-pinned, tag equal to the locked `@playwright/test`), `cross-engine-harness.test.ts` (engines run in the image, no install step). Seven mutations, all predicted, all red.
 - **Dependabot consequence of #44:** a Dependabot bump of `@playwright/test` now fails `supply-chain.test.ts` until `ci.yml`'s image tag and digest move with it. The failure message names the manifest URL; read the digest with `curl -sSI -H 'Accept: application/vnd.oci.image.index.v1+json' https://mcr.microsoft.com/v2/playwright/manifests/v<ver>-noble` (header `docker-content-digest`).
