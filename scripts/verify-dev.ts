@@ -13,10 +13,15 @@
  * 4. The sync API's /health reports ok, that SHA and db "ok", with the
  *    noindex header (the API is not password-gated, by operator decision).
  *
- * Every check retries, because the previous deploy can be served for a few
- * seconds after an upload and a new Custom Domain's DNS and certificate can
- * take a minute on the first deploy. One thing never retries: a web response
- * that serves content WITHOUT the password. That is a leak, not a delay.
+ * Nothing is retried (Refs #83). The one wait is for a named condition: both
+ * hosts serving the expected commit, since the previous deploy can be served
+ * for a few seconds after an upload. Each look waits on only two answers: an
+ * older commit, and no answer from a host that has not yet answered in this
+ * run (a new Custom Domain's DNS on its first deploy). Anything else fails at
+ * once, by name: a status other than 200, a missing stamp, a dropped
+ * connection from a host that has answered, and above all a page served
+ * WITHOUT the password, which is a leak at any look. Once both hosts serve
+ * the commit, every check is judged once, on that look's own answers.
  *
  * The password is sent, never printed: no problem message carries a header.
  */
@@ -143,8 +148,8 @@ interface Outcome {
 
 /**
  * Probes `url` and judges the answer. A request that fails outright (a dropped
- * connection, DNS not yet resolving a new hostname) is a problem like any other,
- * so the retry loop retries it and the report names it instead of crashing.
+ * connection, DNS not yet resolving a new hostname) is reported, never thrown,
+ * so the report names it.
  */
 async function check(
   label: string,
@@ -165,46 +170,156 @@ async function check(
   return { problems: judge(answer), answer };
 }
 
+/** How long to wait for the expected commit: `polls` looks, `pollMs` apart. */
+export interface Wait {
+  polls: number;
+  pollMs: number;
+}
+
+/** The commit an answer reports, or a problem no wait will fix. */
+type Reported = { commit: string } | { problem: string };
+
+function webCommit(probe: Probe): Reported {
+  if (probe.status !== 200)
+    return {
+      problem: `web: status ${String(probe.status)} with the password, expected 200`,
+    };
+  const stamp = COMMIT_STAMP.exec(probe.body)?.[1];
+  return stamp === undefined
+    ? { problem: 'web: no wordfarer-commit meta tag in the page' }
+    : { commit: stamp };
+}
+
+function syncCommit(probe: Probe): Reported {
+  if (probe.status !== 200)
+    return {
+      problem: `sync: /health status ${String(probe.status)}, expected 200`,
+    };
+  let body: unknown;
+  try {
+    body = JSON.parse(probe.body);
+  } catch {
+    return { problem: 'sync: /health did not return JSON' };
+  }
+  return typeof body === 'object' &&
+    body !== null &&
+    'commit' in body &&
+    typeof body.commit === 'string'
+    ? { commit: body.commit }
+    : {
+        problem: `sync: /health returned ${JSON.stringify(body)}, with no commit`,
+      };
+}
+
+/** Where one host stands on the expected commit after one look. */
+type Standing =
+  | { kind: 'served' }
+  | { kind: 'waiting'; problem: string }
+  | { kind: 'failed'; problem: string };
+
 export async function verifyDev(
   target: Target,
-  { attempts, delayMs }: { attempts: number; delayMs: number },
+  { polls, pollMs }: Wait,
 ): Promise<string[]> {
+  if (!Number.isInteger(polls) || polls < 1)
+    throw new RangeError(
+      `polls must be a whole number of at least 1, got ${String(polls)}`,
+    );
   const healthUrl = new URL('/health', target.syncUrl).href;
   const robotsUrl = new URL('/robots.txt', target.webUrl).href;
   const right = { Authorization: basicAuthorization(target.password) };
   // Appending to the real password guarantees a different one.
   const wrong = { Authorization: basicAuthorization(`${target.password}x`) };
 
-  let problems: string[] = [];
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+  /** Hosts that have answered in this run: a later failed request from one is a failure, not a wait. */
+  const answered = new Set<'web' | 'sync'>();
+  const look = async (
+    host: 'web' | 'sync',
+    label: string,
+    url: string,
+    headers: Record<string, string>,
+    judge: (probe: Probe) => string[],
+  ): Promise<Outcome & { unanswered: boolean }> => {
+    const before = answered.has(host);
+    const outcome = await check(label, url, headers, judge);
+    if (outcome.answer !== null) answered.add(host);
+    return { ...outcome, unanswered: outcome.answer === null && !before };
+  };
+  const standing = (
+    outcome: Outcome & { unanswered: boolean },
+    reported: (probe: Probe) => Reported,
+    stale: (commit: string) => string,
+  ): Standing => {
+    if (outcome.answer === null)
+      return {
+        kind: outcome.unanswered ? 'waiting' : 'failed',
+        problem: outcome.problems.join('; '),
+      };
+    const read = reported(outcome.answer);
+    if ('problem' in read) return { kind: 'failed', problem: read.problem };
+    return read.commit === target.sha
+      ? { kind: 'served' }
+      : { kind: 'waiting', problem: stale(read.commit) };
+  };
+
+  let waiting: string[] = [];
+  for (let poll = 1; poll <= polls; poll += 1) {
     const gate = [
-      await check('web without credentials', target.webUrl, {}, (p) =>
+      await look('web', 'web without credentials', target.webUrl, {}, (p) =>
         gateProblems('web without credentials', p),
       ),
-      await check('web with a wrong password', target.webUrl, wrong, (p) =>
-        gateProblems('web with a wrong password', p),
+      await look(
+        'web',
+        'web with a wrong password',
+        target.webUrl,
+        wrong,
+        (p) => gateProblems('web with a wrong password', p),
       ),
     ];
-    const gateProblemsFound = gate.flatMap((outcome) => outcome.problems);
-    if (gate.some(({ answer }) => answer !== null && leaked(answer))) {
-      return gateProblemsFound;
+    if (gate.some(({ answer }) => answer !== null && leaked(answer)))
+      return gate.flatMap((outcome) => outcome.problems);
+    const web = await look('web', 'web', target.webUrl, right, (p) =>
+      webProblems(p, target.sha),
+    );
+    const sync = await look('sync', 'sync', healthUrl, {}, (p) =>
+      healthProblems(p, target.sha),
+    );
+    const hosts = [
+      standing(
+        web,
+        webCommit,
+        (c) => `web: serves commit ${c}, expected ${target.sha}`,
+      ),
+      standing(
+        sync,
+        syncCommit,
+        (c) => `sync: /health serves commit ${c}, expected ${target.sha}`,
+      ),
+    ];
+    const failed = hosts.flatMap((h) =>
+      h.kind === 'failed' ? [h.problem] : [],
+    );
+    if (failed.length > 0) return failed;
+    if (hosts.every((h) => h.kind === 'served')) {
+      const robots = await look(
+        'web',
+        'robots.txt',
+        robotsUrl,
+        {},
+        robotsProblems,
+      );
+      return [...gate, robots, web, sync].flatMap(
+        (outcome) => outcome.problems,
+      );
     }
-    const rest = [
-      await check('robots.txt', robotsUrl, {}, robotsProblems),
-      await check('web', target.webUrl, right, (p) =>
-        webProblems(p, target.sha),
-      ),
-      await check('sync', healthUrl, {}, (p) => healthProblems(p, target.sha)),
-    ];
-    problems = [
-      ...gateProblemsFound,
-      ...rest.flatMap((outcome) => outcome.problems),
-    ];
-    if (problems.length === 0) return [];
-    if (attempt < attempts)
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    waiting = hosts.flatMap((h) => (h.kind === 'waiting' ? [h.problem] : []));
+    if (poll < polls)
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
-  return problems;
+  return [
+    `the expected commit ${target.sha} was not served on both hosts after ${String(polls)} looks ${String(pollMs)} ms apart`,
+    ...waiting,
+  ];
 }
 
 function required(name: string): string {
@@ -222,7 +337,7 @@ if (import.meta.main) {
       sha: required('EXPECTED_SHA'),
       password: required('DEV_BASIC_AUTH_PASSWORD'),
     },
-    { attempts: 18, delayMs: 10_000 },
+    { polls: 36, pollMs: 5_000 },
   );
   if (problems.length > 0) {
     for (const problem of problems) console.error(`✗ ${problem}`);
