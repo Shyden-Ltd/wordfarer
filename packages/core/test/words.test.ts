@@ -159,10 +159,10 @@ function exactWordR(word: WordMemory, wall: Decimal): Decimal {
  * times half the span and half R's integral, which is closed form.
  *
  * Measured for #76: the 60-digit result agrees with a 120-digit run in all
- * 45 digits compared, and with the Simpson's rule over 2,000 panels it
- * replaces to 4.5e-23 or better. Each of the four tests that call it takes
- * 6 to 11 ms alone, against 2.8 to 4.6 s with Simpson's rule, so they run
- * under the global timeout.
+ * 45 digits compared, and the Simpson's rule over 2,000 panels it replaces
+ * to 4.5e-23 or better. Each of the four tests that call it takes
+ * 6 to 11 ms alone, against 2.8 to 4.6 s with Simpson's rule, and up to
+ * 118 ms over ten full-suite runs, so they run under the global timeout.
  */
 function continuous(state: GameState, from: number, to: number): Decimal {
   const skew = state.wall - state.sim;
