@@ -28,4 +28,4 @@ npm workspaces · TypeScript · Svelte 5 · Vite · Vitest + fast-check + Stryke
 
 ## Content rule
 
-No lexicon item, culture card, motif, story line or UI string reaches a paid build unless it is `native-reviewed`. The public web launch has the same bar. Labels of 3 words or fewer get their own audit. Motifs are publicly shared decorative traditions only: no Aboriginal dot-painting or other restricted or sacred designs.
+No native speakers are available before release (operator, 2026-10-02; spec D18). Every build ships `claude-checked` and `native-reviewed` content and refuses `draft` and `rejected`. `claude-checked` must carry its evidence: two independent sources, a back-translation, and a label audit for text of 3 words or fewer. Be as accurate as possible, and never add a gate that needs a native reviewer. Players report mistakes in game (#51–#54). Motifs are publicly shared decorative traditions only: no Aboriginal dot-painting or other restricted or sacred designs.
