@@ -9,6 +9,7 @@ import {
   meanRetrievability,
   retrievability,
 } from '../src/memory';
+import { exactMean } from './fsrs-reference';
 import { MEAN_R_REFERENCE } from './mean-r-reference';
 
 /**
@@ -17,19 +18,6 @@ import { MEAN_R_REFERENCE } from './mean-r-reference';
  */
 
 const D = Decimal.clone({ precision: 60 });
-
-/** The exact mean over [from, from + span] days, by the subtraction of two integrals. */
-function exactMean(s: number, fromDays: number, spanDays: number): Decimal {
-  // The literal, not DECAY: the reference must not move with the code.
-  const d = new D(0.1542);
-  const f = new D('0.9').pow(new D(-1).div(d)).minus(1);
-  const e = new D(1).minus(d);
-  const integral = (t: Decimal): Decimal =>
-    new D(s).div(f.mul(e)).mul(f.mul(t).div(s).plus(1).pow(e).minus(1));
-  const from = new D(fromDays);
-  const span = new D(spanDays);
-  return integral(from.plus(span)).minus(integral(from)).div(span);
-}
 
 function relative(got: number, want: Decimal | string): number {
   const w = new D(want);
