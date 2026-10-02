@@ -190,6 +190,8 @@ describe('verifyDev', () => {
   let dropRobots = false;
   /** The next unauthenticated page request is redirected instead of challenged. */
   let redirectGateOnce = false;
+  /** The status the authorised page answers with. */
+  let authorisedStatus = 200;
   let requests = 0;
   let authorisedRequests = 0;
   let webStale = 0;
@@ -240,7 +242,10 @@ describe('verifyDev', () => {
         return;
       }
       webStale += 1;
-      res.writeHead(200, { 'content-type': 'text/html', ...tag });
+      res.writeHead(authorised ? authorisedStatus : 200, {
+        'content-type': 'text/html',
+        ...tag,
+      });
       res.end(page(webStale <= staleLooks ? OLD : served));
     });
     await new Promise<void>((resolve) =>
@@ -268,6 +273,7 @@ describe('verifyDev', () => {
     dropAuthorisedAt = 0;
     dropRobots = false;
     redirectGateOnce = false;
+    authorisedStatus = 200;
     requests = 0;
     authorisedRequests = 0;
     webStale = 0;
@@ -325,6 +331,27 @@ describe('verifyDev', () => {
       `sync: /health serves commit ${OLD}, expected ${SHA}`,
     ]);
     expect(requests, 'three looks of four probes').toBe(12);
+  });
+
+  it('fails at once when the page answers an error while the deploy is stale', async () => {
+    reset();
+    staleLooks = 5;
+    authorisedStatus = 500;
+    expect(await verifyDev(target(), { polls: 3, pollMs: 0 })).toEqual([
+      'web: status 500 with the password, expected 200',
+    ]);
+    expect(requests, 'one look of four probes').toBe(4);
+  });
+
+  it('fails at once on a leak while the deploy is still stale', async () => {
+    reset();
+    gated = false;
+    served = OLD;
+    const problems = await verifyDev(target(), { polls: 3, pollMs: 0 });
+    expect(problems).toContain(
+      'web without credentials: answered 200, expected 401; the password gate is not in front of it',
+    );
+    expect(requests, 'the two gate probes of the first look').toBe(2);
   });
 
   it('fails a flaky gate that answers wrongly once, with no second look', async () => {
