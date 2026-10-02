@@ -87,6 +87,11 @@ describe('BALANCE', () => {
       0.5,
     ],
     [
+      'design §5: the n-th pick-up in a destination costs 20 x 1.15^n',
+      (b) => [b.words.pickUpC0, b.words.pickUpGrowth],
+      [20, 1.15],
+    ],
+    [
       'parent §3.4: rank stability thresholds in days',
       (b) => b.memory.rankStabilityDays,
       { recognised: 2, recalled: 7, fluent: 14, mastered: 30 },

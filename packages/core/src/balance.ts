@@ -35,6 +35,9 @@ export interface Balance {
     /** b_w = rankBonus[rank] x (floorShare + (1 - floorShare) x R) (parent §3.3). */
     readonly rankBonus: Readonly<Record<Rank, number>>;
     readonly floorShare: number;
+    /** The n-th pick-up in a destination (n already picked there) costs pickUpC0 x pickUpGrowth^n (design §5). */
+    readonly pickUpC0: number;
+    readonly pickUpGrowth: number;
   };
   readonly memory: {
     /** FSRS stability, in days, at which each rank above Heard is reached (parent §3.4). */
@@ -118,6 +121,8 @@ export const BALANCE: Balance = deepFreeze({
       mastered: 0.4,
     },
     floorShare: 0.5,
+    pickUpC0: 20,
+    pickUpGrowth: 1.15,
   },
   memory: {
     rankStabilityDays: { recognised: 2, recalled: 7, fluent: 14, mastered: 30 },

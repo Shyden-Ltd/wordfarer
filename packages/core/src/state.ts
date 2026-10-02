@@ -8,6 +8,7 @@
  * an interval unable to change any stored arithmetic.
  */
 import { simMs, type SimMs, type WallMs } from './clock';
+import type { WordMemory } from './memory';
 import { Num, type NumTuple } from './num';
 
 export interface Anchor {
@@ -24,9 +25,20 @@ export interface GameState {
   readonly anchor: Anchor;
   /** Encounters owned, by id. An id that is absent is owned 0 times. */
   readonly owned: Readonly<Record<string, number>>;
+  /** Insight held. Only correct due reviews earn it, so it never accrues between events. */
+  readonly insight: NumTuple;
+  /** Words picked up, by lexicon item id: each one's rank and FSRS card. */
+  readonly words: Readonly<Record<string, WordMemory>>;
+  /**
+   * The simulated time since which every word's retrievability curve and the
+   * wall-minus-sim skew have held unchanged: the last review or offline-cap
+   * clip. Each word's mean R in an hour bucket is taken from here or the
+   * bucket's start, whichever is later (design §2.2 item 3).
+   */
+  readonly memorySince: SimMs;
 }
 
-/** A new game at wall time `wall`: nothing owned, no Understanding. */
+/** A new game at wall time `wall`: nothing owned, no Understanding, no words. */
 export function initialState(wall: WallMs): GameState {
   const start = simMs(0);
   return {
@@ -34,10 +46,21 @@ export function initialState(wall: WallMs): GameState {
     wall,
     anchor: { sim: start, understanding: Num.toTuple(Num.from(0)) },
     owned: {},
+    insight: Num.toTuple(Num.from(0)),
+    words: {},
+    memorySince: start,
   };
 }
 
 /** How many of Encounter `id` the state owns. Reads own keys only. */
 export function ownedCount(state: GameState, id: string): number {
   return Object.hasOwn(state.owned, id) ? (state.owned[id] ?? 0) : 0;
+}
+
+/** The memory of word `id` if it has been picked up. Reads own keys only. */
+export function pickedWord(
+  state: GameState,
+  id: string,
+): WordMemory | undefined {
+  return Object.hasOwn(state.words, id) ? state.words[id] : undefined;
 }
