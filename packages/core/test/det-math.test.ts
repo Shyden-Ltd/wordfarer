@@ -126,6 +126,8 @@ const DOMAIN: Record<Unary, { min: number; max: number; edges: number[] }> = {
 
 // Each test evaluates up to 5,001 decimal.js references: about 1 s on an
 // idle laptop, and 12 s measured while another suite loaded the machine.
+// Measured again for #72: 151 ms (expm1) to 1715 ms (pow) alone, and up to
+// 6331 ms (log1p) over ten loaded full-suite runs.
 // The bound under test is accuracy, so a 5 s timeout would guard only the
 // machine's load.
 const REFERENCE_TIMEOUT_MS = 60_000;

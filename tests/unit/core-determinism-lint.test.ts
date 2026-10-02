@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { ESLint, type Linter } from 'eslint';
 import tseslint from 'typescript-eslint';
 
@@ -20,11 +20,23 @@ const BAN_RULES = new Set([
   'no-restricted-imports',
 ]);
 
+const CORE_FIXTURE = 'packages/core/src/fixture.ts';
+
 const eslint = new ESLint({
   overrideConfig: [
     { files: ['**/*.ts'], ...tseslint.configs.disableTypeChecked },
   ],
 });
+
+// ESLint loads eslint.config.js and its plugins on the first lint, not in the
+// constructor: the first lintText took 485 to 574 ms, every later one 2 to
+// 4 ms (#72). The first case paid it for the whole file and timed out under
+// load, so the load happens here and each case's duration is its own lint.
+const CONFIG_LOAD_TIMEOUT_MS = 60_000;
+
+beforeAll(async () => {
+  await eslint.calculateConfigForFile(CORE_FIXTURE);
+}, CONFIG_LOAD_TIMEOUT_MS);
 
 async function lint(
   code: string,
@@ -37,7 +49,7 @@ async function lint(
   return result.messages;
 }
 
-async function bans(code: string, filePath = 'packages/core/src/fixture.ts') {
+async function bans(code: string, filePath = CORE_FIXTURE) {
   const messages = await lint(code, filePath);
   return messages.filter((m) => m.ruleId !== null && BAN_RULES.has(m.ruleId));
 }
