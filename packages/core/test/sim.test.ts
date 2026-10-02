@@ -81,6 +81,11 @@ function json(state: GameState): string {
   return JSON.stringify(state);
 }
 
+// The random-sequence property replays games through the real actions: 1.8 s
+// alone, 9.8 s measured inside the full core suite on a loaded machine (#28).
+// The property is correctness, so a 5 s timeout would guard only the load.
+const PROPERTY_TIMEOUT_MS = 60_000;
+
 function relativeError(got: Num, want: Num): number {
   return Math.abs(Num.toNumber(Num.div(Num.sub(got, want), want)));
 }
@@ -358,33 +363,37 @@ describe('no reachable state holds NaN, a negative or an infinite value (AC8)', 
     },
   );
 
-  it('over random sequences of listens, purchases and returns', () => {
-    let reached = 0;
-    fc.assert(
-      fc.property(
-        fc.array(step, { minLength: 20, maxLength: 120, size: 'max' }),
-        (steps) => {
-          let s = initialState(START);
-          for (const e of steps) {
-            if (e.kind === 'listen') s = listen(course, s);
-            if (e.kind === 'buy') {
-              const r = buyEncounter(course, s, e.id, e.count);
-              if (r.ok) {
-                s = r.state;
-                reached++;
+  it(
+    'over random sequences of listens, purchases and returns',
+    { timeout: PROPERTY_TIMEOUT_MS },
+    () => {
+      let reached = 0;
+      fc.assert(
+        fc.property(
+          fc.array(step, { minLength: 20, maxLength: 120, size: 'max' }),
+          (steps) => {
+            let s = initialState(START);
+            for (const e of steps) {
+              if (e.kind === 'listen') s = listen(course, s);
+              if (e.kind === 'buy') {
+                const r = buyEncounter(course, s, e.id, e.count);
+                if (r.ok) {
+                  s = r.state;
+                  reached++;
+                }
               }
+              if (e.kind === 'advance') {
+                s = advance(course, s, wallMs(s.wall + e.deltaMs)).state;
+              }
+              sane(s);
             }
-            if (e.kind === 'advance') {
-              s = advance(course, s, wallMs(s.wall + e.deltaMs)).state;
-            }
-            sane(s);
-          }
-        },
-      ),
-      { numRuns: 500 },
-    );
-    expect(reached).toBeGreaterThan(100);
-  });
+          },
+        ),
+        { numRuns: 500 },
+      );
+      expect(reached).toBeGreaterThan(100);
+    },
+  );
 });
 
 describe('buyEncounter (AC9)', () => {
