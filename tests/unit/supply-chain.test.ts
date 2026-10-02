@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { withoutYamlComments, withoutYamlQuotes } from './source-text';
+import { trackedFiles } from './tracked-files';
 import { isRecord } from './workflow-secrets';
 
 /**
@@ -321,9 +321,7 @@ describe('the install is reproducible', () => {
   });
 
   it('nothing under node_modules is tracked', () => {
-    const tracked = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
-      .split('\n')
-      .filter((path) => path !== '');
+    const tracked = trackedFiles();
     expect(tracked, 'positive control: git ls-files sees this repo').toContain(
       'package.json',
     );
