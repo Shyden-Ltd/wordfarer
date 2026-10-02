@@ -197,11 +197,15 @@ function continuous(state: GameState, from: number, to: number): Decimal {
 
 // `continuous` takes Simpson's rule over 2,000 panels in decimal.js: 6.6 s
 // measured inside the full core suite (#28), against 0 ms for the code under
-// test. The bound under test is accuracy, so a 5 s timeout would guard only
-// the machine's load (the same reasoning as det-math.test.ts).
+// test. Measured again for #72: 3413 to 6054 ms alone (the clipped return is
+// slowest, over 5 s with nothing else running), and up to 24850 ms over ten
+// loaded full-suite runs. The bound under test is accuracy, so a 5 s timeout
+// would guard only the machine's load (the same reasoning as
+// det-math.test.ts).
 const REFERENCE_TIMEOUT_MS = 60_000;
 // The random-sequence property replays 300 games through the real actions:
-// 5.8 s measured inside the full core suite.
+// 5.8 s measured inside the full core suite; 4086 to 5182 ms alone and up to
+// 11734 ms over ten loaded full-suite runs (#72).
 const PROPERTY_TIMEOUT_MS = 60_000;
 
 function relative(got: number, want: Decimal): number {

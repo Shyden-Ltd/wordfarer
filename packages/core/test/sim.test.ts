@@ -82,9 +82,11 @@ function json(state: GameState): string {
 }
 
 // The random-sequence property replays games through the real actions: 1.8 s
-// alone, 9.8 s measured inside the full core suite on a loaded machine (#28).
-// AC6 walks every hour bucket from the anchor (D-M1-2.3) over spans of up to
-// 216 h: 1.3 s alone, over 5 s in the full suite (#28; 53 ms before buckets).
+// alone, 9.8 s measured inside the full core suite on a loaded machine (#28);
+// 1537 to 1721 ms alone and up to 13482 ms over ten loaded full-suite runs
+// (#72). AC6 walks every hour bucket from the anchor (D-M1-2.3) over spans of
+// up to 216 h: 1.3 s alone, over 5 s in the full suite (#28; 53 ms before
+// buckets); 837 to 1371 ms alone and up to 6896 ms loaded (#72).
 // Both properties are correctness, so a 5 s timeout would guard only the load.
 const PROPERTY_TIMEOUT_MS = 60_000;
 
