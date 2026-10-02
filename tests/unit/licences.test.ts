@@ -109,6 +109,8 @@ describe('the rights holder is Shyden Labs (Refs #49)', () => {
         'tests/unit/licences.test.ts',
       ]),
     );
+    // Measured 115 text files at b2a6f3f (#82). Lower it only in the commit that removes files.
+    expect(files.length, 'text files read').toBeGreaterThan(114);
     expect(
       files.filter(({ text }) => DISSOLVED.test(text)).map(({ path }) => path),
     ).toEqual([]);
