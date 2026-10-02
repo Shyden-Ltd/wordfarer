@@ -65,13 +65,14 @@ describe('GET /health', () => {
     }
   });
 
-  it('refuses every method but GET, naming the one it allows', async () => {
-    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+  it.each(['POST', 'PUT', 'DELETE', 'PATCH'])(
+    'refuses %s, naming GET as the one method it allows',
+    async (method) => {
       const response = await call('/health', { method });
       expect(response.status, method).toBe(405);
       expect(response.headers.get('allow'), method).toBe('GET');
-    }
-  });
+    },
+  );
 
   it.each(['/', '/healthz', '/health/', '/HEALTH', '/health/extra'])(
     'answers 404 for %s',
