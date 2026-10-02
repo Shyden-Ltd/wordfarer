@@ -357,6 +357,7 @@ describe('verifyDev', () => {
     expect(leaking).toHaveLength(6);
     expect(broken).toHaveLength(4);
     expect(unreachable).toHaveLength(5);
+    // runtime population: the problems verifyDev reported for three broken sites.
     for (const problem of [...leaking, ...broken, ...unreachable]) {
       expect(problem).not.toContain(PASSWORD);
       expect(problem).not.toContain(basicAuthorization(PASSWORD).slice(6));

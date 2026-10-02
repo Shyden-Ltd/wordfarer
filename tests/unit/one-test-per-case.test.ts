@@ -282,12 +282,6 @@ const BURN_DOWN: readonly string[] = [
   'packages/core/test/synthetic-course.test.ts :: uses 10 tags, each on at least one Encounter and one item, and no other tag :: for (const t of course().tags)',
   "packages/lockdown/test/lockdown.test.ts :: leaves the production API host untouched, robots.txt included :: for (const path of ['/health', '/robots.txt'])",
   'tests/engines/det-math.spec.ts :: det-math gives the same bits as Node on 100,000 inputs per function :: for (const fn of FUNCTIONS)',
-  "tests/unit/licences.test.ts :: the pattern catches every spelling of the old names :: for (const name of [ OLD_COMPANY, OLD_HANDLE, OLD_HANDLE.toLowerCase(), ['Shyden', 'Limited'].join(' '), ])",
-  'tests/unit/third-party-notices.test.ts :: covers the whole dependency closure of every shipped workspace :: for (const name of directDependencies(workspace))',
-  'tests/unit/third-party-notices.test.ts :: covers the whole dependency closure of every shipped workspace :: for (const name of names)',
-  'tests/unit/third-party-notices.test.ts :: covers the whole dependency closure of every shipped workspace :: for (const workspace of SHIPPED_WORKSPACES)',
-  'tests/unit/third-party-notices.test.ts :: names each bundled Apache-2.0 @stdlib package and points to the full texts :: for (const name of stdlib)',
-  'tests/unit/verify-dev.test.ts :: never puts the password in a problem :: for (const problem of [...leaking, ...broken, ...unreachable])',
 ];
 
 const TEST_FILE = /\.(test|spec)\.ts$/;
