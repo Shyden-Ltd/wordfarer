@@ -29,12 +29,27 @@ export {
 } from './rng';
 export { BALANCE, type Balance, type Rank } from './balance';
 export { encounterOutput, milestonesReached, purchaseCost } from './encounters';
-export { encounterRate, producedBetween } from './production';
+export {
+  encounterRate,
+  producedBetween,
+  rateAt,
+  wordMultiplier,
+} from './production';
+export {
+  RANKS,
+  type MemoryCard,
+  type QueueItem,
+  type WordMemory,
+} from './memory';
+export { pickUpCost } from './words';
 export {
   advance,
+  answerPractice,
+  answerReview,
   buyEncounter,
   integrate,
   listen,
+  pickUpWord,
   understandingNow,
   view,
   type AdvanceSummary,
@@ -42,7 +57,13 @@ export {
   type Result,
   type View,
 } from './sim';
-export { initialState, ownedCount, type Anchor, type GameState } from './state';
+export {
+  initialState,
+  ownedCount,
+  pickedWord,
+  type Anchor,
+  type GameState,
+} from './state';
 export type {
   CardSet,
   Cefr,
