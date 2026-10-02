@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { trackedFiles } from './tracked-files';
 
 /**
  * The licence set promised by spec D17 is present and is the real text
@@ -75,9 +75,8 @@ const OLD_HANDLE = ['Shyden', 'Ltd'].join('-');
 
 /** Every tracked text file, read from disk (a NUL byte marks binary). */
 const trackedText = () =>
-  execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
-    .split('\0')
-    .filter((path) => path !== '' && existsSync(path))
+  trackedFiles()
+    .filter((path) => existsSync(path))
     .map((path) => ({ path, text: readFileSync(path, 'utf8') }))
     .filter(({ text }) => !text.includes('\0'));
 

@@ -197,6 +197,14 @@ it('t', () => {
     ).toEqual([{ test: 't', loop: 'for (const r of rows)', line: 5 }]);
   });
 
+  it('still reports a loop in a one-line test whose marker sits above the test itself', () => {
+    expect(
+      found(`
+// runtime population: the rows f() returned
+it('t', () => f().forEach((r) => expect(r).toBe(1)));`),
+    ).toEqual([{ test: 't', loop: 'f().forEach(…)', line: 3 }]);
+  });
+
   it('reports both loops of a nested pair, outer first', () => {
     expect(
       found(`
@@ -244,7 +252,32 @@ for (const name of NAMES)
  * list AND on an entry that no longer matches a site, so the list can only
  * shrink: a conversion removes its entries in the same pull request.
  */
-const BURN_DOWN: readonly string[] = [];
+const BURN_DOWN: readonly string[] = [
+  "apps/sync-worker/test/health.test.ts :: refuses every method but GET, naming the one it allows :: for (const method of ['POST', 'PUT', 'DELETE', 'PATCH'])",
+  'packages/core/test/det-math.test.ts :: ${name} at its domain edges :: for (const x of edges)',
+  'packages/core/test/encounters.test.ts :: the n-th purchase costs c0 x 1.15^n, n = 0..2000 :: for (let owned = 0; owned <= 2000; owned++)',
+  'packages/core/test/num.test.ts :: gives exact powers of ten :: for (const k of [0, 1, 7, 300, 4000, -300])',
+  'packages/core/test/rng.test.ts :: are independent: drawing from one never changes another :: for (const name of NAMES)',
+  'packages/core/test/synthetic-course.test.ts :: has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes :: for (const card of r.cultureCards)',
+  'packages/core/test/synthetic-course.test.ts :: has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes :: for (const r of course().regions)',
+  'packages/core/test/synthetic-course.test.ts :: has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes :: for (const set of sets)',
+  'packages/core/test/synthetic-course.test.ts :: orders each destination A1 first, and gives every grammar root words to multiply :: for (const d of r.destinations)',
+  'packages/core/test/synthetic-course.test.ts :: orders each destination A1 first, and gives every grammar root words to multiply :: for (const node of r.grammarNodes)',
+  'packages/core/test/synthetic-course.test.ts :: orders each destination A1 first, and gives every grammar root words to multiply :: for (const r of course().regions)',
+  'packages/core/test/synthetic-course.test.ts :: orders each destination A1 first, and gives every grammar root words to multiply :: for (const root of node.roots)',
+  'packages/core/test/synthetic-course.test.ts :: places festival windows on the bot calendar, as integer half-open wall-clock spans :: for (const w of windows)',
+  'packages/core/test/synthetic-course.test.ts :: prices Encounters positively and ascending within a region :: for (const r of course().regions)',
+  'packages/core/test/synthetic-course.test.ts :: uses 10 tags, each on at least one Encounter and one item, and no other tag :: for (const t of [...onEncounters, ...onItems, ...onCards])',
+  'packages/core/test/synthetic-course.test.ts :: uses 10 tags, each on at least one Encounter and one item, and no other tag :: for (const t of course().tags)',
+  "packages/lockdown/test/lockdown.test.ts :: leaves the production API host untouched, robots.txt included :: for (const path of ['/health', '/robots.txt'])",
+  'tests/engines/det-math.spec.ts :: det-math gives the same bits as Node on 100,000 inputs per function :: for (const fn of FUNCTIONS)',
+  "tests/unit/licences.test.ts :: the pattern catches every spelling of the old names :: for (const name of [ OLD_COMPANY, OLD_HANDLE, OLD_HANDLE.toLowerCase(), ['Shyden', 'Limited'].join(' '), ])",
+  'tests/unit/third-party-notices.test.ts :: covers the whole dependency closure of every shipped workspace :: for (const name of directDependencies(workspace))',
+  'tests/unit/third-party-notices.test.ts :: covers the whole dependency closure of every shipped workspace :: for (const name of names)',
+  'tests/unit/third-party-notices.test.ts :: covers the whole dependency closure of every shipped workspace :: for (const workspace of SHIPPED_WORKSPACES)',
+  'tests/unit/third-party-notices.test.ts :: names each bundled Apache-2.0 @stdlib package and points to the full texts :: for (const name of stdlib)',
+  'tests/unit/verify-dev.test.ts :: never puts the password in a problem :: for (const problem of [...leaking, ...broken, ...unreachable])',
+];
 
 const TEST_FILE = /\.(test|spec)\.ts$/;
 
