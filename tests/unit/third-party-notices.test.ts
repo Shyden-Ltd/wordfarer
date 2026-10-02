@@ -33,17 +33,28 @@ describe('THIRD-PARTY-NOTICES.md', () => {
     expect(listing).toBe(renderNotices(lock, '.'));
   });
 
-  it('covers the whole dependency closure of every shipped workspace', () => {
+  for (const workspace of SHIPPED_WORKSPACES) {
+    // package.json is fixture data, read here so each dependency is its own test.
+    const direct = directDependencies(workspace);
+
+    it(`${workspace} has direct dependencies to check`, () => {
+      expect(direct.length).toBeGreaterThan(0);
+    });
+
+    for (const name of direct)
+      it(`the closure of ${workspace} holds its dependency ${name}`, () => {
+        expect(bundledPackages(lock).map((p) => p.name)).toContain(name);
+      });
+  }
+
+  it('names every package of the closure, which is larger than the direct list', () => {
     const names = bundledPackages(lock).map((p) => p.name);
     // The closure is larger than the direct list: @stdlib's six pull in 152.
     expect(
       names.filter((n) => n.startsWith('@stdlib/')).length,
     ).toBeGreaterThan(100);
-    for (const workspace of SHIPPED_WORKSPACES) {
-      for (const name of directDependencies(workspace)) {
-        expect(names, `${workspace} depends on ${name}`).toContain(name);
-      }
-    }
+    // runtime population: the closure bundledPackages computes from the lockfile.
+    // Listing it at collection would run the code under test there.
     for (const name of names) {
       expect(listing, name).toContain(`\`${name}\``);
     }
@@ -90,14 +101,21 @@ describe('pickFile, the same on every filesystem', () => {
 describe('NOTICE', () => {
   const notice = readFileSync('NOTICE', 'utf8');
 
-  it('names each bundled Apache-2.0 @stdlib package and points to the full texts', () => {
-    const stdlib = directDependencies('packages/core').filter((n) =>
-      n.startsWith('@stdlib/'),
-    );
+  // package.json is fixture data, read here so each package is its own test.
+  const stdlib = directDependencies('packages/core').filter((n) =>
+    n.startsWith('@stdlib/'),
+  );
+
+  it('has bundled Apache-2.0 @stdlib packages to name', () => {
     expect(stdlib.length).toBeGreaterThan(0);
-    for (const name of stdlib) {
+  });
+
+  for (const name of stdlib)
+    it(`names the bundled Apache-2.0 package ${name}`, () => {
       expect(notice, name).toContain(name);
-    }
+    });
+
+  it('points to the full licence texts', () => {
     expect(notice).toContain('THIRD-PARTY-NOTICES.md');
   });
 });

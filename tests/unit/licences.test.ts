@@ -81,15 +81,17 @@ const trackedText = () =>
     .filter(({ text }) => !text.includes('\0'));
 
 describe('the rights holder is Shyden Labs (Refs #49)', () => {
-  it('the pattern catches every spelling of the old names', () => {
-    for (const name of [
-      OLD_COMPANY,
-      OLD_HANDLE,
-      OLD_HANDLE.toLowerCase(),
-      ['Shyden', 'Limited'].join(' '),
-    ]) {
+  for (const name of [
+    OLD_COMPANY,
+    OLD_HANDLE,
+    OLD_HANDLE.toLowerCase(),
+    ['Shyden', 'Limited'].join(' '),
+  ])
+    it(`the pattern catches the old spelling ${name}`, () => {
       expect(DISSOLVED.test(`by ${name}.`), name).toBe(true);
-    }
+    });
+
+  it('the pattern leaves the new names alone', () => {
     expect(DISSOLVED.test('Shyden Labs and shyden-labs')).toBe(false);
   });
 
