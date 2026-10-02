@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Serve Wordfarer's dev web app at `https://dev.wordfarer.shyden.co.uk` and its sync API at `https://dev-api.wordfarer.shyden.co.uk`, with the web app behind the shared Shyden Ltd dev password (HTTP Basic, ported from shyden.co.uk), then retire the `*.workers.dev` addresses and Cloudflare Access.
+**Goal:** Serve Wordfarer's dev web app at `https://dev.wordfarer.shyden.co.uk` and its sync API at `https://dev-api.wordfarer.shyden.co.uk`, with the web app behind the shared Shyden Labs dev password (HTTP Basic, ported from shyden.co.uk), then retire the `*.workers.dev` addresses and Cloudflare Access.
 
 **Architecture:** A new workspace package, `packages/lockdown`, holds the gate: exact, case-insensitive production-hostname matching, a blocking `robots.txt`, Basic auth with a constant-time compare, and the noindex header. The dev web Worker gains a script that runs before its static assets (`run_worker_first`), so no asset is served without the password; the sync Worker marks non-prod responses noindex and asks for no password (operator decision). Both Workers are attached to their hostnames as Workers Custom Domains in `wrangler.jsonc`, and `scripts/verify-dev.ts` proves the gate live on every `develop` deploy.
 
@@ -2218,7 +2218,7 @@ index cd6aee0..f02f180 100644
  | D16 | Name                  | **Wordfarer** (trademark clearance is a pre-launch task)                                                                                                                                                                                                                                                                                                                                                                                           |
  | D17 | Openness and licences | **Public, open-source repository** (operator 2026-10-01 01:01 UTC: "all new repos will usually be open-source and public and transparent"). Code **Apache-2.0**. Content is licensed **per item** (01:03 and 02:59 UTC): adapted from CC BY-SA sources → **CC BY-SA 4.0**; original writing and art (story, culture cards, motifs, original examples) → **CC BY-NC-SA 4.0**. The Wordfarer name and logo are **reserved trademarks**, not licensed |
 
-+**D9 amended 2026-10-01 (#39):** dev is served at `dev.wordfarer.shyden.co.uk` (web) and `dev-api.wordfarer.shyden.co.uk` (sync) as Workers Custom Domains, behind the shared Shyden Ltd dev password, which replaced Cloudflare Access. See §6.7.
++**D9 amended 2026-10-01 (#39):** dev is served at `dev.wordfarer.shyden.co.uk` (web) and `dev-api.wordfarer.shyden.co.uk` (sync) as Workers Custom Domains, behind the shared Shyden Labs dev password, which replaced Cloudflare Access. See §6.7.
 +
  ## 3. Core loop
 
@@ -2246,7 +2246,7 @@ index 857bf67..2bd70a2 100644
  Every change follows test-driven development, and each ticket gets its own branch with a PR into `develop`. Third-party GitHub Actions are pinned to full commit SHAs, Dependabot opens its PRs against `develop`, and `tests/unit/supply-chain.test.ts` enforces both.
 
 -Every merge to `develop` deploys dev (web and sync Workers, D1) behind Cloudflare Access, and is verified live before it is marked `dev-verified`.
-+Every merge to `develop` deploys dev (web and sync Workers, D1) and verifies it live before marking it `dev-verified`. Dev is at `https://dev.wordfarer.shyden.co.uk`, behind the shared Shyden Ltd dev password, with the sync API at `https://dev-api.wordfarer.shyden.co.uk`.
++Every merge to `develop` deploys dev (web and sync Workers, D1) and verifies it live before marking it `dev-verified`. Dev is at `https://dev.wordfarer.shyden.co.uk`, behind the shared Shyden Labs dev password, with the sync API at `https://dev-api.wordfarer.shyden.co.uk`.
 
  ## Licences
 

@@ -1,8 +1,8 @@
 # Wordfarer — Design Spec
 
 - **Status:** Design approved section by section by the operator (Shyden) on 2026-10-01. Reviewed to zero findings in 7 passes and self-approved under the house rule (§17).
-- **Owner:** Shyden Ltd
-- **Repo:** `Shyden-Ltd/wordfarer`
+- **Owner:** Shyden Labs
+- **Repo:** `shyden-labs/wordfarer`
 - **Research:** [`docs/research/2026-10-01-idle-game-research.md`](../../research/2026-10-01-idle-game-research.md). H-numbers (H1–H28) and the do-not list (DN1–DN26) cited below refer to sections 3 and 7b of that report.
 
 ---
@@ -49,7 +49,7 @@ The operator's choices from brainstorming, recorded so no later session re-litig
 | D16 | Name                  | **Wordfarer** (trademark clearance is a pre-launch task)                                                                                                                                                                                                                                                                                                                                                                                           |
 | D17 | Openness and licences | **Public, open-source repository** (operator 2026-10-01 01:01 UTC: "all new repos will usually be open-source and public and transparent"). Code **Apache-2.0**. Content is licensed **per item** (01:03 and 02:59 UTC): adapted from CC BY-SA sources → **CC BY-SA 4.0**; original writing and art (story, culture cards, motifs, original examples) → **CC BY-NC-SA 4.0**. The Wordfarer name and logo are **reserved trademarks**, not licensed |
 
-**D9 amended 2026-10-01 (#39):** dev is served at `dev.wordfarer.shyden.co.uk` (web) and `dev-api.wordfarer.shyden.co.uk` (sync) as Workers Custom Domains, behind the shared Shyden Ltd dev password, which replaced Cloudflare Access. See §6.7.
+**D9 amended 2026-10-01 (#39):** dev is served at `dev.wordfarer.shyden.co.uk` (web) and `dev-api.wordfarer.shyden.co.uk` (sync) as Workers Custom Domains, behind the shared Shyden Labs dev password, which replaced Cloudflare Access. See §6.7.
 
 ## 3. Core loop
 
@@ -176,7 +176,7 @@ A local web tool for the operator. It shows one item at a time (target, translat
 - Steam and mobile builds **refuse** any item that is not `native-reviewed`.
 - The web build may include `claude-checked` items, shown with a small "beta" marker. **Before the public web launch (end of M6), every item reachable on web must be `native-reviewed`;** the beta marker is only for dev and preview deploys.
 - Separate guards, each mutation-verified:
-  - labels of 3 words or fewer are audited separately from prose, because a bare label gives machine translation no context (a sibling Shyden Ltd project shipped Vietnamese _"Tình dục"_, "sexual intercourse", as the column header for "Sex");
+  - labels of 3 words or fewer are audited separately from prose, because a bare label gives machine translation no context (a sibling Shyden Labs project shipped Vietnamese _"Tình dục"_, "sexual intercourse", as the column header for "Sex");
   - no UI string in the `id` catalogue is identical to English unless allow-listed;
   - no empty strings;
   - every culture card, motif and story line carries a review block;
@@ -376,7 +376,7 @@ All thresholds are starting values.
 - **Reports queue:** sorted by priority (automatic flags and cheating reports first). Each case shows the entry, name history, report count and reasons, and the verification report (replay differences, latency stats).
 - **Audit log:** every staff action records who, what, when, before/after, and a **required reason**. It is append-only, with no update or delete path, including for the Owner.
 - **Monitoring page:** open reports, flags per day, sync and Worker error rates, D1 size, rate-limit hits.
-- **Player support:** Settings shows a **support code** and a _Contact support_ button that opens an email to the Shyden Ltd support address with the code filled in. There is no in-game messaging.
+- **Player support:** Settings shows a **support code** and a _Contact support_ button that opens an email to the Shyden Labs support address with the code filled in. There is no in-game messaging.
 
 ## 12. Testing and quality
 
@@ -431,12 +431,12 @@ TDD throughout: write the failing test first. Zero warnings policy across lint, 
    - Dependabot (npm + github-actions, target `develop`, sub-path groups above `patch-updates`);
    - SHA-pinned actions;
    - deploy secrets only as **environment** secrets, with `dev` restricted to `develop` and `production` to `main` (production also needs the operator's approval). A source-text guard (comments stripped) asserts that every `secrets.*` reference other than `GITHUB_TOKEN` sits in a job that declares an `environment`, which is what makes the agent App's `workflows: write` safe on a public repo whose fork PRs run workflows. Neither the App nor `GITHUB_TOKEN` can list secrets, so whether any repository-level secrets exist is checked by the operator, not by CI;
-   - the supply-chain test from `Shyden-Ltd/repo-template`.
+   - the supply-chain test from `shyden-labs/repo-template`.
 
 ## 13. Delivery
 
 - **Flow:** `main` and `develop`, one branch per ticket, PRs into `develop`. Every `develop` merge deploys the **dev** environment (web Worker + sync Worker + D1 dev). Production deploys come from `main` releases.
-- **Board:** "Wordfarer Stories", Shyden-Ltd project 4 (`PVT_kwDOEOcG584BlRWb`). Every story is fully specified with acceptance criteria before work starts. It is separate from the ShyTalk, Shyden Site and ShyFerry boards.
+- **Board:** "Wordfarer Stories", shyden-labs project 4 (`PVT_kwDOEOcG584BlRWb`). Every story is fully specified with acceptance criteria before work starts. It is separate from the ShyTalk, Shyden Site and ShyFerry boards.
 - **Milestones (each becomes an epic):**
   - **M0:** repo, CI, supply-chain guards, dev deploy pipeline.
   - **M1:** core simulation and pacing bots (no UI).

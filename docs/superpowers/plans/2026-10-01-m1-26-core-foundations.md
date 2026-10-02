@@ -894,7 +894,7 @@ index 704595b..e4ea761 100644
 +++ b/NOTICE
 @@ -6,3 +6,18 @@ Version 2.0 (see LICENSE). Course content is licensed per item under
  CC BY-SA 4.0 or CC BY-NC-SA 4.0 (see LICENSE-CONTENT.md). The Wordfarer
- name and logo are trademarks of Shyden Ltd and are not licensed
+ name and logo are trademarks of Shyden Labs and are not licensed
  (see TRADEMARKS.md).
 +
 +This product bundles the following Apache-2.0 packages from the stdlib
