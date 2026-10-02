@@ -5,9 +5,18 @@ import {
   type StampUpgradeId,
 } from '../src/balance';
 import { simMs, wallMs, type WallMs } from '../src/clock';
-import type { CourseData } from '../src/course';
+import type { CourseData, Encounter } from '../src/course';
+import { purchaseCost } from '../src/encounters';
 import { Num } from '../src/num';
-import { buyUpgrade, understandingNow, type Result } from '../src/sim';
+import type { EncounterRate } from '../src/production';
+import {
+  advance,
+  buyEncounter,
+  buyUpgrade,
+  understandingNow,
+  view,
+  type Result,
+} from '../src/sim';
 import { initialState, type GameState } from '../src/state';
 import {
   encounterCostFactor,
@@ -513,5 +522,254 @@ describe('buyUpgrade (AC3)', () => {
       buyUpgrade(course, holding({ insight: 100 }), 'journeySlot2'),
     );
     expect(JSON.parse(JSON.stringify(after))).toEqual(after);
+  });
+});
+
+/**
+ * The economy under upgrades (#29 AC1, AC2, AC4): the course here has three
+ * Encounters so a Phrasebook can be seen to reach only its own tag, and one
+ * Encounter with two tags so two Phrasebooks can be seen to stack.
+ */
+const tea: Encounter = { id: 'tea', tags: ['food'], c0: 10, p0: 0.1 };
+const stall: Encounter = {
+  id: 'stall',
+  tags: ['market', 'food'],
+  c0: 50,
+  p0: 0.5,
+};
+const bus: Encounter = { id: 'bus', tags: ['family'], c0: 100, p0: 1 };
+
+const economy: CourseData = {
+  ...course,
+  id: 'economy-course',
+  regions: [
+    {
+      id: 'r0',
+      destinations: [],
+      encounters: [tea, stall, bus],
+      cardSets: [],
+      cultureCards: [],
+      grammarNodes: [],
+    },
+  ],
+};
+
+const OWNED = { tea: 10, stall: 1, bus: 1 };
+
+function breakdownOf(state: GameState): readonly EncounterRate[] {
+  return view(economy, state, state.wall).breakdown;
+}
+
+function linesOf(state: GameState, id: string): readonly [string, number][] {
+  const found = breakdownOf(state).find((e) => e.id === id);
+  if (found === undefined) throw new Error(`no breakdown for ${id}`);
+  return found.lines.map((l) => [l.name, Num.toNumber(l.factor)]);
+}
+
+describe('the rate breakdown (AC4, DN6)', () => {
+  it('names every multiplier on an Encounter, base first and stamps last', () => {
+    const s = holding({
+      owned: OWNED,
+      stampsEarned: 3,
+      upgrades: { 'phrasebook:food': 1 },
+    });
+    expect(linesOf(s, 'tea').map(([name]) => name)).toEqual([
+      'encounters',
+      'milestones',
+      'words',
+      'phrasebook:food',
+      'stamps',
+    ]);
+  });
+
+  it('gives each line its value: 10 tea at 0.1, one milestone, a Phrasebook and 3 stamps', () => {
+    const s = holding({
+      owned: OWNED,
+      stampsEarned: 3,
+      upgrades: { 'phrasebook:food': 1 },
+    });
+    const lines = linesOf(s, 'tea');
+    expect(lines.map(([, v]) => v).slice(0, 4)).toEqual([1, 2, 1, 2]);
+    expect(lines[4]?.[1]).toBeCloseTo(1.3, 14);
+  });
+
+  it('lists only the Encounters owned, in course order', () => {
+    const s = holding({ owned: { bus: 2, tea: 1 } });
+    expect(breakdownOf(s).map((e) => e.id)).toEqual(['tea', 'bus']);
+  });
+
+  it('shows no Phrasebook line for a tag whose Phrasebook is not owned', () => {
+    const s = holding({ owned: OWNED, upgrades: { 'phrasebook:food': 1 } });
+    expect(linesOf(s, 'bus').map(([name]) => name)).toEqual([
+      'encounters',
+      'milestones',
+      'words',
+      'stamps',
+    ]);
+  });
+
+  it('stacks two Phrasebooks on an Encounter with both tags, one line each, in the Encounter tag order', () => {
+    const s = holding({
+      owned: OWNED,
+      upgrades: { 'phrasebook:food': 1, 'phrasebook:market': 1 },
+    });
+    expect(linesOf(s, 'stall')).toEqual([
+      ['encounters', 0.5],
+      ['milestones', 1],
+      ['words', 1],
+      ['phrasebook:market', 2],
+      ['phrasebook:food', 2],
+      ['stamps', 1],
+    ]);
+  });
+
+  it.each<[string, Holding]>([
+    ['no upgrades', { owned: OWNED }],
+    [
+      'a Phrasebook and 3 stamps',
+      { owned: OWNED, stampsEarned: 3, upgrades: { 'phrasebook:food': 1 } },
+    ],
+    [
+      'two Phrasebooks and 12 stamps',
+      {
+        owned: { tea: 137, stall: 25, bus: 3 },
+        stampsEarned: 12,
+        upgrades: { 'phrasebook:food': 1, 'phrasebook:market': 1 },
+      },
+    ],
+  ])(
+    'with %s, each Encounter’s lines multiply to its rate and the rates add to the displayed rate',
+    (_name, h) => {
+      const s = holding(h);
+      const v = view(economy, s, s.wall);
+      let total = Num.from(0);
+      // runtime population: the Encounters the view lists.
+      for (const entry of v.breakdown) {
+        const [first, ...rest] = entry.lines;
+        if (first === undefined) throw new Error('an empty breakdown');
+        const product = rest.reduce(
+          (a, l) => Num.mul(a, l.factor),
+          first.factor,
+        );
+        expect(Num.toTuple(entry.rate)).toEqual(Num.toTuple(product));
+        total = Num.add(total, entry.rate);
+      }
+      expect(v.breakdown.length).toBe(Object.keys(h.owned ?? {}).length);
+      expect(Num.toTuple(v.rate)).toEqual(Num.toTuple(total));
+    },
+  );
+
+  it('pays the rate the breakdown shows: an hour at 5.2 per second makes 18,720', () => {
+    const s = holding({
+      owned: { tea: 10 },
+      stampsEarned: 3,
+      upgrades: { 'phrasebook:food': 1 },
+    });
+    const later = advance(economy, s, wallMs(s.wall + HOUR_MS)).state;
+    expect(Num.toNumber(understandingNow(economy, later))).toBeCloseTo(
+      18_720,
+      8,
+    );
+  });
+});
+
+describe('Phrasebooks (AC1)', () => {
+  it.each<[string, number]>([
+    ['tea', 2],
+    ['stall', 2],
+    ['bus', 1],
+  ])('phrasebook:food multiplies %s by %i', (id, want) => {
+    const without = holding({ owned: OWNED });
+    const withIt = holding({
+      owned: OWNED,
+      upgrades: { 'phrasebook:food': 1 },
+    });
+    const rate = (s: GameState): number =>
+      Num.toNumber(
+        breakdownOf(s).find((e) => e.id === id)?.rate ?? Num.from(NaN),
+      );
+    expect(rate(withIt) / rate(without)).toBe(want);
+  });
+
+  it('banks the old rate up to a mid-hour purchase and pays the new one after it', () => {
+    const start = holding({ owned: { tea: 10 }, insight: 20 });
+    const half = advance(
+      economy,
+      start,
+      wallMs(start.wall + HOUR_MS / 2),
+    ).state;
+    const bought = ok(buyUpgrade(economy, half, 'phrasebook:food'));
+    const end = advance(
+      economy,
+      bought,
+      wallMs(bought.wall + HOUR_MS / 2),
+    ).state;
+    // 2 per second for half an hour, then 4 per second.
+    expect(Num.toNumber(understandingNow(economy, end))).toBeCloseTo(10_800, 8);
+  });
+});
+
+describe('the offline cap upgrade in a return (AC1)', () => {
+  it.each<[number, number, boolean]>([
+    [0, 24, false],
+    [0, 25, true],
+    [1, 48, false],
+    [1, 49, true],
+    [2, 72, false],
+    [2, 73, true],
+  ])(
+    'at level %i, a return after %i h is clipped: %s',
+    (level, hours, clipped) => {
+      const s = holding({ owned: { tea: 1 }, upgrades: { offlineCap: level } });
+      const { summary } = advance(economy, s, wallMs(s.wall + hours * HOUR_MS));
+      expect(summary.clipped).toBe(clipped);
+      expect(summary.creditedMs).toBe(
+        Math.min(hours, 24 * (level + 1)) * HOUR_MS,
+      );
+    },
+  );
+});
+
+describe('the Encounter discount in a purchase (AC2)', () => {
+  it.each<[number, number]>([
+    [0, 1],
+    [1, 0.95],
+    [8, 0.6],
+  ])('at level %i, 5 tea cost x%d of their list price', (level, share) => {
+    const list = purchaseCost(tea, 3, 5);
+    const price = Num.mul(list, Num.from(1 - Math.min(level * 0.05, 0.4)));
+    expect(Num.toNumber(price) / Num.toNumber(list)).toBeCloseTo(share, 14);
+    const exact = holding({
+      owned: { tea: 3 },
+      upgrades: { encounterDiscount: level },
+    });
+    const paying = deepFreeze({
+      ...exact,
+      anchor: { ...exact.anchor, understanding: Num.toTuple(price) },
+    });
+    const after = ok(buyEncounter(economy, paying, 'tea', 5));
+    expect(after.owned).toEqual({ tea: 8 });
+    expect(after.anchor.understanding).toEqual(Num.toTuple(Num.from(0)));
+  });
+
+  it('refuses a discounted purchase 1% short, naming the discounted cost', () => {
+    const s = holding({
+      owned: { tea: 3 },
+      upgrades: { encounterDiscount: 8 },
+    });
+    const price = Num.mul(purchaseCost(tea, 3, 5), Num.from(0.6));
+    const short = Num.mul(price, Num.from(0.99));
+    const poor = deepFreeze({
+      ...s,
+      anchor: { ...s.anchor, understanding: Num.toTuple(short) },
+    });
+    expect(buyEncounter(economy, poor, 'tea', 5)).toEqual({
+      ok: false,
+      rejection: {
+        kind: 'unaffordable',
+        cost: Num.toTuple(price),
+        understanding: Num.toTuple(short),
+      },
+    });
   });
 });

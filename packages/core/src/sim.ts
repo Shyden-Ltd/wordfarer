@@ -23,9 +23,20 @@ import {
   type QueueItem,
 } from './memory';
 import { Num, type NumTuple } from './num';
-import { producedBetween, rateAt } from './production';
+import {
+  producedBetween,
+  rateBreakdown,
+  totalRate,
+  type EncounterRate,
+} from './production';
 import { ownedCount, pickedWord, type GameState } from './state';
-import { findUpgrade, upgradeLevel, type UpgradeCurrency } from './upgrades';
+import {
+  encounterCostFactor,
+  findUpgrade,
+  offlineCapMs,
+  upgradeLevel,
+  type UpgradeCurrency,
+} from './upgrades';
 import { currentDestination, curriculum, pickUpCost } from './words';
 
 export type Rejection =
@@ -72,8 +83,10 @@ export interface AdvanceSummary {
 
 export interface View {
   readonly understanding: Num;
-  /** Understanding per second, word multipliers included. */
+  /** Understanding per second, every multiplier included: the breakdown's rates, added. */
   readonly rate: Num;
+  /** Each owned Encounter's rate as the product of its named multipliers (DN6). */
+  readonly breakdown: readonly EncounterRate[];
   readonly insight: Num;
   /** At most 10 due items; how many more are due is never shown (DN23). */
   readonly queue: readonly QueueItem[];
@@ -122,7 +135,7 @@ export function advance(
   now: WallMs,
 ): { readonly state: GameState; readonly summary: AdvanceSummary } {
   const elapsed = now - state.wall;
-  const cap = BALANCE.offline.capMs;
+  const cap = offlineCapMs(state);
   const credited = Math.min(Math.max(elapsed, 0), cap);
   let next = integrate(state, credited);
   const clipped = elapsed > cap;
@@ -146,9 +159,11 @@ export function advance(
 /** The values at wall time `now`, derived without changing `state`. */
 export function view(course: CourseData, state: GameState, now: WallMs): View {
   const at = advance(course, state, now).state;
+  const breakdown = rateBreakdown(course, at, at.sim);
   return {
     understanding: understandingNow(course, at),
-    rate: rateAt(course, at, at.sim),
+    rate: totalRate(breakdown),
+    breakdown,
     insight: Num.fromTuple(at.insight),
     queue: reviewQueue(at.words, at.wall),
   };
@@ -190,7 +205,10 @@ export function buyEncounter(
     return { ok: false, rejection: { kind: 'invalidCount', count } };
   }
   const owned = ownedCount(state, id);
-  const cost = purchaseCost(encounter, owned, count);
+  const cost = Num.mul(
+    purchaseCost(encounter, owned, count),
+    Num.from(encounterCostFactor(state)),
+  );
   const anchored = reanchor(course, state);
   const understanding = Num.fromTuple(anchored.anchor.understanding);
   if (Num.cmp(understanding, cost) < 0) {

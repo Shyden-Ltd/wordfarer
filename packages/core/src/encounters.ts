@@ -57,12 +57,14 @@ export function milestonesReached(owned: number): number {
   return listed + Math.floor((owned - last) / milestoneEvery);
 }
 
+/** The output multiplier from the milestones `owned` has reached: 2^milestones. */
+export function milestoneFactor(owned: number): Num {
+  return Num.pow(MILESTONE_MULTIPLIER, milestonesReached(owned));
+}
+
 /** Understanding per second from `owned` of `encounter`: p0 x owned x 2^milestones. */
 export function encounterOutput(encounter: Encounter, owned: number): Num {
   checkOwned(owned);
   if (owned === 0) return Num.from(0);
-  return Num.mul(
-    Num.from(encounter.p0 * owned),
-    Num.pow(MILESTONE_MULTIPLIER, milestonesReached(owned)),
-  );
+  return Num.mul(Num.from(encounter.p0 * owned), milestoneFactor(owned));
 }
