@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CourseData, LexiconItem } from '../src/course';
+import type { CourseData, LexiconItem, Region } from '../src/course';
 import {
   BOT_EPOCH_WALL_MS,
   syntheticCourse,
@@ -19,6 +19,16 @@ const course = (): CourseData => (cached ??= syntheticCourse(1));
 const nonEmpty = (ids: readonly string[]) =>
   ids.filter((id) => id.trim() !== '');
 
+/** The spec's three regions (#26 AC8), by index: each region is its own test. */
+const REGION_INDICES = [0, 1, 2] as const;
+
+const region = (index: number): Region => {
+  const found = course().regions[index];
+  if (found === undefined)
+    throw new Error(`the course has no region ${String(index)}`);
+  return found;
+};
+
 function allItems(c: CourseData): LexiconItem[] {
   return c.regions.flatMap((r) => [
     ...r.destinations.flatMap((d) => d.lexicon),
@@ -36,9 +46,13 @@ describe('syntheticCourse', () => {
     expect(syntheticCourse(2).regions).not.toEqual(course().regions);
   });
 
-  it('has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes', () => {
+  it('has 3 regions', () => {
     expect(nonEmpty(course().regions.map((r) => r.id))).toHaveLength(3);
-    for (const r of course().regions) {
+  });
+
+  for (const index of REGION_INDICES)
+    it(`region ${String(index)} has 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes`, () => {
+      const r = region(index);
       expect(nonEmpty(r.destinations.map((d) => d.id)), r.id).toHaveLength(4);
       expect(
         nonEmpty(r.destinations.flatMap((d) => d.lexicon.map((w) => w.id))),
@@ -49,16 +63,17 @@ describe('syntheticCourse', () => {
       expect(nonEmpty(r.grammarNodes.map((g) => g.id)), r.id).toHaveLength(4);
       const sets = new Set(r.cardSets.map((s) => s.id));
       expect(nonEmpty([...sets]).length, r.id).toBeGreaterThanOrEqual(2);
+      // runtime population: the cards the generator made for this region.
       for (const card of r.cultureCards)
         expect(sets.has(card.setId), card.id).toBe(true);
+      // runtime population: the card sets the generator made for this region.
       for (const set of sets) {
         expect(
           r.cultureCards.filter((c) => c.setId === set).length,
           set,
         ).toBeGreaterThanOrEqual(2);
       }
-    }
-  });
+    });
 
   it('uses 10 tags, each on at least one Encounter and one item, and no other tag', () => {
     expect(nonEmpty(course().tags)).toHaveLength(10);
@@ -70,10 +85,12 @@ describe('syntheticCourse', () => {
     const onCards = new Set(
       course().regions.flatMap((r) => r.cultureCards.flatMap((c) => c.tags)),
     );
+    // runtime population: the tags the generator chose.
     for (const t of course().tags) {
       expect(onEncounters.has(t), `${t} on an Encounter`).toBe(true);
       expect(onItems.has(t), `${t} on an item`).toBe(true);
     }
+    // runtime population: every tag the generator put on an Encounter, item or card.
     for (const t of [...onEncounters, ...onItems, ...onCards]) {
       expect(course().tags, t).toContain(t);
     }
@@ -89,9 +106,11 @@ describe('syntheticCourse', () => {
     expect(ids.length).toBe(3 * (150 + 12 + 6 + 12));
   });
 
-  it('orders each destination A1 first, and gives every grammar root words to multiply', () => {
-    const rank = { A1: 0, A2: 1, B1: 2 } as const;
-    for (const r of course().regions) {
+  for (const index of REGION_INDICES)
+    it(`region ${String(index)} orders each destination A1 first, and gives every grammar root words to multiply`, () => {
+      const rank = { A1: 0, A2: 1, B1: 2 } as const;
+      const r = region(index);
+      // runtime population: the destinations the generator made for this region.
       for (const d of r.destinations) {
         const levels = d.lexicon.map((w) => rank[w.cefr]);
         expect(levels, d.id).toEqual([...levels].sort((a, b) => a - b));
@@ -102,34 +121,36 @@ describe('syntheticCourse', () => {
           d.lexicon.flatMap((w) => (w.root === undefined ? [] : [w.root])),
         ),
       );
+      // runtime population: the grammar nodes the generator made for this region.
       for (const node of r.grammarNodes) {
         expect(node.roots.length, node.id).toBeGreaterThan(0);
         expect(
           nonEmpty(node.derived.map((w) => w.id)).length,
           node.id,
         ).toBeGreaterThan(0);
+        // runtime population: the roots the generator gave this node.
         for (const root of node.roots)
           expect(rootsInLexicon.has(root), `${node.id} ${root}`).toBe(true);
       }
-    }
-  });
+    });
 
-  it('prices Encounters positively and ascending within a region', () => {
-    for (const r of course().regions) {
+  for (const index of REGION_INDICES)
+    it(`region ${String(index)} prices its Encounters positively and ascending`, () => {
+      const r = region(index);
       const c0 = r.encounters.map((e) => e.c0);
       expect(
         c0.every((c) => c > 0) && r.encounters.every((e) => e.p0 > 0),
         r.id,
       ).toBe(true);
       expect(c0, r.id).toEqual([...c0].sort((a, b) => a - b));
-    }
-  });
+    });
 
   it('places festival windows on the bot calendar, as integer half-open wall-clock spans', () => {
     const windows = course().regions.flatMap((r) =>
       r.cultureCards.flatMap((c) => c.festival?.windows ?? []),
     );
     expect(windows.length).toBeGreaterThan(0);
+    // runtime population: the festival windows the generator placed.
     for (const w of windows) {
       expect(
         Number.isSafeInteger(w.startWallMs) &&
