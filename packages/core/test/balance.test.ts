@@ -155,6 +155,34 @@ describe('BALANCE', () => {
       1.5,
     ],
     ['design §5: in-season bonus x 2', (b) => b.seasons.inSeasonMultiplier, 2],
+    [
+      'design §5 (#29): Insight upgrade costs, one per level',
+      (b) => b.insightUpgrades.costs,
+      {
+        journeySlot2: [25],
+        journeySlot3: [100],
+        offlineCap: [40, 120],
+        phrasebook: [20],
+        pemanduFaster1: [30],
+        pemanduFaster2: [90],
+        pemanduFaster3: [250],
+      },
+    ],
+    [
+      'design §5 (#29): stamp upgrade costs, one per level',
+      (b) => b.stamps.costs,
+      {
+        startingUnderstanding: [1, 2, 3, 5, 8],
+        encounterDiscount: [1, 1, 2, 2, 3, 3, 4, 4],
+        journeyCut: [2, 3, 5],
+        pemanduEarly: [5],
+      },
+    ],
+    [
+      'design §5 (#29): 100 starting Understanding per level',
+      (b) => b.stamps.startingUnderstandingPerLevel,
+      100,
+    ],
   ])('%s', (_source, read, expected) => {
     expect(read(BALANCE)).toEqual(expected);
   });

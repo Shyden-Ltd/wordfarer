@@ -12,6 +12,20 @@
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 
+/** Insight upgrades priced by level (design §5, #29). */
+export type InsightUpgradeId =
+  | 'journeySlot2'
+  | 'journeySlot3'
+  | 'offlineCap'
+  | 'phrasebook'
+  | 'pemanduFaster1'
+  | 'pemanduFaster2'
+  | 'pemanduFaster3';
+
+/** Passport Stamp upgrades priced by level (design §5, #29). */
+export type StampUpgradeId =
+  'startingUnderstanding' | 'encounterDiscount' | 'journeyCut' | 'pemanduEarly';
+
 /** Word ranks, Heard (new) to Mastered (parent §3.4). */
 export type Rank = 'heard' | 'recognised' | 'recalled' | 'fluent' | 'mastered';
 
@@ -59,8 +73,15 @@ export interface Balance {
     readonly maxSlots: number;
   };
   readonly stamps: {
-    /** Global production per stamp held (parent §3.1). */
+    /**
+     * Global production per stamp ever earned (parent §3.1): spending stamps
+     * never lowers it (operator, 2026-10-02, #29).
+     */
     readonly globalBonusPerStamp: number;
+    /** Each stamp upgrade's cost at each level; it is maxed at the last. */
+    readonly costs: Readonly<Record<StampUpgradeId, readonly number[]>>;
+    /** Understanding a destination starts with, per level (design §5). */
+    readonly startingUnderstandingPerLevel: number;
     /** Stamp upgrades (design §5). */
     readonly costDiscountPerLevel: number;
     readonly costDiscountCap: number;
@@ -70,6 +91,11 @@ export interface Balance {
   readonly insightUpgrades: {
     /** "Phrasebook": production multiplier for one tag (design §5). */
     readonly phrasebookMultiplier: number;
+    /**
+     * Each Insight upgrade's cost at each level; it is maxed at the last.
+     * `phrasebook` prices every tag's Phrasebook.
+     */
+    readonly costs: Readonly<Record<InsightUpgradeId, readonly number[]>>;
   };
   readonly offline: {
     /** Offline time credited, raised by Insight upgrades (design §5, DN19). */
@@ -144,12 +170,30 @@ export const BALANCE: Balance = deepFreeze({
   },
   stamps: {
     globalBonusPerStamp: 0.1,
+    costs: {
+      startingUnderstanding: [1, 2, 3, 5, 8],
+      encounterDiscount: [1, 1, 2, 2, 3, 3, 4, 4],
+      journeyCut: [2, 3, 5],
+      pemanduEarly: [5],
+    },
+    startingUnderstandingPerLevel: 100,
     costDiscountPerLevel: 0.05,
     costDiscountCap: 0.4,
     journeyCutPerLevel: 0.1,
     journeyCutCap: 0.3,
   },
-  insightUpgrades: { phrasebookMultiplier: 2 },
+  insightUpgrades: {
+    phrasebookMultiplier: 2,
+    costs: {
+      journeySlot2: [25],
+      journeySlot3: [100],
+      offlineCap: [40, 120],
+      phrasebook: [20],
+      pemanduFaster1: [30],
+      pemanduFaster2: [90],
+      pemanduFaster3: [250],
+    },
+  },
   offline: {
     capMs: 24 * HOUR_MS,
     capStepMs: 24 * HOUR_MS,

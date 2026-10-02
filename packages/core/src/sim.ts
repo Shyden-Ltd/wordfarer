@@ -25,6 +25,7 @@ import {
 import { Num, type NumTuple } from './num';
 import { producedBetween, rateAt } from './production';
 import { ownedCount, pickedWord, type GameState } from './state';
+import { findUpgrade, upgradeLevel, type UpgradeCurrency } from './upgrades';
 import { currentDestination, curriculum, pickUpCost } from './words';
 
 export type Rejection =
@@ -37,7 +38,25 @@ export type Rejection =
     }
   | { readonly kind: 'poolEmpty' }
   | { readonly kind: 'unknownWord'; readonly itemId: string }
-  | { readonly kind: 'notDue'; readonly itemId: string; readonly due: number };
+  | { readonly kind: 'notDue'; readonly itemId: string; readonly due: number }
+  | { readonly kind: 'unknownUpgrade'; readonly id: string }
+  | {
+      readonly kind: 'upgradeMaxed';
+      readonly id: string;
+      readonly level: number;
+    }
+  | {
+      readonly kind: 'upgradePrerequisite';
+      readonly id: string;
+      readonly requires: string;
+    }
+  | {
+      readonly kind: 'upgradeUnaffordable';
+      readonly id: string;
+      readonly currency: UpgradeCurrency;
+      readonly cost: NumTuple;
+      readonly held: NumTuple;
+    };
 
 export type Result =
   | { readonly ok: true; readonly state: GameState }
@@ -286,4 +305,64 @@ export function answerPractice(state: GameState, itemId: string): Result {
     return { ok: false, rejection: { kind: 'unknownWord', itemId } };
   }
   return { ok: true, state };
+}
+
+/**
+ * Buy the next level of upgrade `id` (design §5), paid in Insight or in
+ * Passport Stamps. Refused, in this order, when the course offers no such
+ * upgrade, it is already at its last level, its prerequisite is not owned,
+ * or the player cannot pay. An upgrade can change a rate, so production up
+ * to the purchase is banked first. Spending stamps leaves `stampsEarned`,
+ * and so the global bonus, alone.
+ */
+export function buyUpgrade(
+  course: CourseData,
+  state: GameState,
+  id: string,
+): Result {
+  const upgrade = findUpgrade(course, id);
+  if (upgrade === undefined) {
+    return { ok: false, rejection: { kind: 'unknownUpgrade', id } };
+  }
+  const level = upgradeLevel(state, id);
+  const cost = upgrade.costs[level];
+  if (cost === undefined) {
+    return { ok: false, rejection: { kind: 'upgradeMaxed', id, level } };
+  }
+  const { requires } = upgrade;
+  if (requires !== undefined && upgradeLevel(state, requires) === 0) {
+    return {
+      ok: false,
+      rejection: { kind: 'upgradePrerequisite', id, requires },
+    };
+  }
+  const held =
+    upgrade.currency === 'insight'
+      ? Num.fromTuple(state.insight)
+      : Num.from(state.stamps);
+  if (Num.cmp(held, Num.from(cost)) < 0) {
+    return {
+      ok: false,
+      rejection: {
+        kind: 'upgradeUnaffordable',
+        id,
+        currency: upgrade.currency,
+        cost: Num.toTuple(Num.from(cost)),
+        held: Num.toTuple(held),
+      },
+    };
+  }
+  const anchored = reanchor(course, state);
+  const upgrades = { ...anchored.upgrades, [id]: level + 1 };
+  return {
+    ok: true,
+    state:
+      upgrade.currency === 'insight'
+        ? {
+            ...anchored,
+            insight: Num.toTuple(Num.sub(held, Num.from(cost))),
+            upgrades,
+          }
+        : { ...anchored, stamps: anchored.stamps - cost, upgrades },
+  };
 }

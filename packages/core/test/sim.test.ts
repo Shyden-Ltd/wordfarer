@@ -105,6 +105,9 @@ describe('initialState', () => {
       insight: [0, 0],
       words: {},
       memorySince: 0,
+      stamps: 0,
+      stampsEarned: 0,
+      upgrades: {},
     });
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
   });
@@ -229,6 +232,9 @@ const arbState = fc
     insight: Num.toTuple(Num.from(0)),
     words: {},
     memorySince: simMs(r.anchorSim),
+    stamps: 0,
+    stampsEarned: 0,
+    upgrades: {},
   }));
 
 describe('integrate (AC6)', () => {
