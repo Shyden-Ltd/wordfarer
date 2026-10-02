@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { build } from 'esbuild';
 import {
-  digests,
+  digest,
   FUNCTIONS,
   type GoldenFunction,
 } from '../../packages/core/test/golden-vectors';
@@ -17,7 +17,7 @@ import {
  */
 
 interface GoldenGlobal {
-  wordfarerGolden: { digests(): Record<GoldenFunction, string> };
+  wordfarerGolden: { digest(fn: GoldenFunction): string };
 }
 
 let bundle = '';
@@ -25,7 +25,7 @@ let bundle = '';
 test.beforeAll(async () => {
   const result = await build({
     stdin: {
-      contents: "export { digests } from './golden-vectors';",
+      contents: "export { digest } from './golden-vectors';",
       resolveDir: 'packages/core/test',
       loader: 'ts',
     },
@@ -42,19 +42,19 @@ test.beforeAll(async () => {
   expect(bundle).toContain('wordfarerGolden');
 });
 
-test('det-math gives the same bits as Node on 100,000 inputs per function', async ({
-  page,
-  browserName,
-}) => {
-  const node = digests();
-  await page.setContent(
-    '<!doctype html><title>det-math golden vectors</title>',
-  );
-  await page.addScriptTag({ content: bundle });
-  const engine = await page.evaluate(() =>
-    (globalThis as unknown as GoldenGlobal).wordfarerGolden.digests(),
-  );
-  for (const fn of FUNCTIONS) {
-    expect.soft(engine[fn], `${browserName}: ${fn}`).toBe(node[fn]);
-  }
-});
+for (const fn of FUNCTIONS)
+  test(`det-math ${fn} gives the same bits as Node on 100,000 inputs`, async ({
+    page,
+    browserName,
+  }) => {
+    await page.setContent(
+      '<!doctype html><title>det-math golden vectors</title>',
+    );
+    await page.addScriptTag({ content: bundle });
+    const engine = await page.evaluate(
+      (name) =>
+        (globalThis as unknown as GoldenGlobal).wordfarerGolden.digest(name),
+      fn,
+    );
+    expect(engine, `${browserName}: ${fn}`).toBe(digest(fn));
+  });

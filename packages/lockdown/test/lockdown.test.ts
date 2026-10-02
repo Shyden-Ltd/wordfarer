@@ -219,15 +219,16 @@ describe('markApiRequest', () => {
     expect(calls).toEqual([]);
   });
 
-  it('leaves the production API host untouched, robots.txt included', async () => {
-    const { serve, calls } = recordingServe();
-    for (const path of ['/health', '/robots.txt']) {
+  it.each(['/health', '/robots.txt'])(
+    'leaves the production API host untouched at %s',
+    async (path) => {
+      const { serve, calls } = recordingServe();
       const response = await markApiRequest(
         request(`https://api.wordfarer.shyden.co.uk${path}`),
         serve,
       );
       expect(response.headers.get('X-Robots-Tag')).toBeNull();
-    }
-    expect(calls).toHaveLength(2);
-  });
+      expect(calls).toHaveLength(1);
+    },
+  );
 });

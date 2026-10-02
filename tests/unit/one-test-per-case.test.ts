@@ -262,16 +262,13 @@ for (const name of NAMES)
 });
 
 /**
- * Every looped site in the suite on the day #58 landed, to be split by #59 to
- * #62. `file :: test :: loop`. The guard fails on a site missing from this
- * list AND on an entry that no longer matches a site, so the list can only
- * shrink: a conversion removes its entries in the same pull request.
+ * Every looped site in the suite on the day #58 landed (24), split by #59 to
+ * #62 and empty since. `file :: test :: loop`. The guard fails on a site
+ * missing from this list AND on an entry that no longer matches a site. Never
+ * add an entry: split the loop, or declare a runtime population or one
+ * scenario above it with its reason.
  */
-const BURN_DOWN: readonly string[] = [
-  "apps/sync-worker/test/health.test.ts :: refuses every method but GET, naming the one it allows :: for (const method of ['POST', 'PUT', 'DELETE', 'PATCH'])",
-  "packages/lockdown/test/lockdown.test.ts :: leaves the production API host untouched, robots.txt included :: for (const path of ['/health', '/robots.txt'])",
-  'tests/engines/det-math.spec.ts :: det-math gives the same bits as Node on 100,000 inputs per function :: for (const fn of FUNCTIONS)',
-];
+const BURN_DOWN: readonly string[] = [];
 
 const TEST_FILE = /\.(test|spec)\.ts$/;
 
