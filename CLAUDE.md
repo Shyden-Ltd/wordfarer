@@ -7,7 +7,7 @@ The global `~/.claude/CLAUDE.md` rules all apply here. This file adds what is sp
 ## Read first
 
 - **`HANDOVER.md`**: where work stopped and the numbered resume steps.
-- **Design spec:** `docs/superpowers/specs/2026-10-01-wordfarer-design.md`. This is the source of truth. Operator decisions D1–D17 in its §2 are settled, so don't re-ask them.
+- **Design spec:** `docs/superpowers/specs/2026-10-01-wordfarer-design.md`. This is the source of truth. Operator decisions D1–D18 in its §2 are settled, so don't re-ask them.
 - **Research:** `docs/research/2026-10-01-idle-game-research.md`. The spec cites its H-numbers (player complaints) and DN-numbers (the do-not list).
 
 ## Boundaries
