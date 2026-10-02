@@ -6,8 +6,24 @@
  * F = 0.9^(-1/d) - 1 puts R at 90% when t = S. Production needs each word's
  * mean R over an hour bucket, so this module also gives that mean in closed
  * form. Everything goes through det-math, so the bits match on every engine.
+ *
+ * Reviews are scheduled by ts-fsrs with FSRS-6's default weights and fuzz
+ * off, so the same answers give the same schedule everywhere: a correct
+ * answer is rated Good and a wrong one Again. A word's rank follows its
+ * stability but moves only on an answer: up (possibly several steps) on a
+ * correct one, exactly one step down on a wrong one, and never through
+ * absence (DN16).
  */
-import { generatorParameters } from 'ts-fsrs';
+import {
+  fsrs,
+  generatorParameters,
+  Rating,
+  State,
+  type Card,
+  type CardInput,
+} from 'ts-fsrs';
+import { BALANCE, type Rank } from './balance';
+import { DAY_MS, type WallMs } from './clock';
 import { exp, expm1, log1p, pow } from './det-math';
 
 const PARAMETERS = generatorParameters({ enable_fuzz: false });
@@ -80,4 +96,179 @@ export function meanRetrievability(
     (shifted / (FACTOR * kept * spanDays)) *
     expm1(kept * log1p((FACTOR * spanDays) / shifted));
   return retrievability(stabilityDays, fromDays) * fromStart;
+}
+
+const SCHEDULER = fsrs(PARAMETERS);
+
+/** Heard (new) to Mastered (parent §3.4). The index is the rank index. */
+export const RANKS: readonly Rank[] = [
+  'heard',
+  'recognised',
+  'recalled',
+  'fluent',
+  'mastered',
+];
+
+/**
+ * A word's FSRS card as plain data: ts-fsrs's fields, with its dates as
+ * integer wall-clock milliseconds so state stays serialisable.
+ */
+export interface MemoryCard {
+  readonly due: number;
+  readonly stability: number;
+  readonly difficulty: number;
+  readonly scheduledDays: number;
+  readonly learningSteps: number;
+  readonly reps: number;
+  readonly lapses: number;
+  readonly state: State;
+  /** Wall time of the last review; null until the first. */
+  readonly lastReview: number | null;
+}
+
+export interface WordMemory {
+  readonly rank: Rank;
+  readonly card: MemoryCard;
+}
+
+/** One entry of the review queue. */
+export interface QueueItem {
+  readonly itemId: string;
+  readonly rank: Rank;
+  readonly retrievability: number;
+}
+
+function rankIndex(rank: Rank): number {
+  return RANKS.indexOf(rank);
+}
+
+function rankAt(index: number): Rank {
+  const rank = RANKS[index];
+  if (rank === undefined) throw new RangeError(`no rank ${String(index)}`);
+  return rank;
+}
+
+/** The highest rank whose stability threshold `stabilityDays` meets. */
+export function rankForStability(stabilityDays: number): Rank {
+  const thresholds = BALANCE.memory.rankStabilityDays;
+  let index = 0;
+  for (let k = 1; k < RANKS.length; k++) {
+    const rank = rankAt(k);
+    if (rank !== 'heard' && stabilityDays >= thresholds[rank]) index = k;
+  }
+  return rankAt(index);
+}
+
+function fromCard(card: Card): MemoryCard {
+  return {
+    due: card.due.getTime(),
+    stability: card.stability,
+    difficulty: card.difficulty,
+    scheduledDays: card.scheduled_days,
+    learningSteps: card.learning_steps,
+    reps: card.reps,
+    lapses: card.lapses,
+    state: card.state,
+    lastReview: card.last_review?.getTime() ?? null,
+  };
+}
+
+function toCard(card: MemoryCard): CardInput {
+  return {
+    due: card.due,
+    stability: card.stability,
+    difficulty: card.difficulty,
+    // Deprecated and unread: ts-fsrs 5 recomputes it from last_review and the
+    // review time, copies the input only into its log, and drops it in 6.0.
+    elapsed_days: 0,
+    scheduled_days: card.scheduledDays,
+    learning_steps: card.learningSteps,
+    reps: card.reps,
+    lapses: card.lapses,
+    state: card.state,
+    last_review: card.lastReview,
+  };
+}
+
+/** A word just picked up at `wall`: Heard, a new card due at once. */
+export function newWordMemory(wall: WallMs): WordMemory {
+  return {
+    rank: 'heard',
+    card: {
+      due: wall,
+      stability: 0,
+      difficulty: 0,
+      scheduledDays: 0,
+      learningSteps: 0,
+      reps: 0,
+      lapses: 0,
+      state: State.New,
+      lastReview: null,
+    },
+  };
+}
+
+/** R at wall time `wall`; 0 for a word never reviewed, as ts-fsrs gives. */
+export function wordRetrievability(word: WordMemory, wall: WallMs): number {
+  const { lastReview, stability } = word.card;
+  if (lastReview === null) return 0;
+  return retrievability(stability, (wall - lastReview) / DAY_MS);
+}
+
+/** Whether the word may be reviewed for score at `wall`. */
+export function isDue(word: WordMemory, wall: WallMs): boolean {
+  return word.card.due <= wall;
+}
+
+/** Answer a review at `wall`: Good if correct, Again if not, and move the rank. */
+export function review(
+  word: WordMemory,
+  wall: WallMs,
+  correct: boolean,
+): WordMemory {
+  const card = fromCard(
+    SCHEDULER.next(
+      toCard(word.card),
+      wall,
+      correct ? Rating.Good : Rating.Again,
+    ).card,
+  );
+  const before = rankIndex(word.rank);
+  const after = correct
+    ? Math.max(before, rankIndex(rankForStability(card.stability)))
+    : Math.max(before - 1, 0);
+  return { rank: rankAt(after), card };
+}
+
+/** Insight for a correct due answer at `rank`: base + perRank x rank index. */
+export function insightFor(rank: Rank): number {
+  const { insightBase, insightPerRank } = BALANCE.memory;
+  return insightBase + insightPerRank * rankIndex(rank);
+}
+
+/**
+ * The review queue at `wall`: at most `queueSize` due items, lowest R first,
+ * ties by item id in code-unit order. How many more are due is never part of
+ * it (DN23).
+ */
+export function reviewQueue(
+  words: Readonly<Record<string, WordMemory>>,
+  wall: WallMs,
+): readonly QueueItem[] {
+  const due: QueueItem[] = [];
+  for (const [itemId, word] of Object.entries(words)) {
+    if (isDue(word, wall)) {
+      due.push({
+        itemId,
+        rank: word.rank,
+        retrievability: wordRetrievability(word, wall),
+      });
+    }
+  }
+  due.sort(
+    (a, b) =>
+      a.retrievability - b.retrievability ||
+      (a.itemId < b.itemId ? -1 : a.itemId > b.itemId ? 1 : 0),
+  );
+  return due.slice(0, BALANCE.memory.queueSize);
 }
