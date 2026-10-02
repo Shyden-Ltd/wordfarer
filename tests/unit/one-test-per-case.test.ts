@@ -405,8 +405,8 @@ describe('the suite', () => {
   });
 
   it('reads the tests in them, counted as tests, not files (Refs #82)', () => {
-    // Measured 386 on #82's branch. Lower it only in the commit that removes tests.
-    expect(scan().tests).toBeGreaterThan(385);
+    // Measured 392 at #82's head. Lower it only in the commit that removes tests.
+    expect(scan().tests).toBeGreaterThan(391);
   });
 
   it('reads at least one test in every file whose text holds a test call', () => {
