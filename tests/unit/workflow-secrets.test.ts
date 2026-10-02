@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { withoutYamlComments } from './source-text';
 import { scanWorkflow } from './workflow-secrets';
 
 /**
@@ -136,11 +137,34 @@ describe('this repo’s workflows keep every secret inside an environment', () =
 
   it('scans every workflow, and every one has jobs', () => {
     const scans = scanAll();
+    // Measured 2 workflows at b2a6f3f (#82). Lower it only in the commit that removes one.
     expect(scans.length, 'positive control: workflows found').toBeGreaterThan(
-      0,
+      1,
     );
     expect(
       scans.filter(({ scan }) => scan.jobs === 0).map(({ file }) => file),
+    ).toEqual([]);
+  });
+
+  it('judges every job, counted as jobs, not files (Refs #82)', () => {
+    const jobs = scanAll().reduce((n, { scan }) => n + scan.jobs, 0);
+    // Measured 4 jobs at b2a6f3f (#82). Lower it only in the commit that removes one.
+    expect(jobs).toBeGreaterThan(3);
+  });
+
+  it('reads a reference in every workflow whose text names a stored secret (Refs #82)', () => {
+    // Read independently of the scanner: the raw text, comments stripped.
+    const naming = scanAll().filter(({ file }) =>
+      /\bsecrets\.(?!GITHUB_TOKEN\b)/.test(
+        withoutYamlComments(readFileSync(join(dir, file), 'utf8')),
+      ),
+    );
+    // Measured 1 at b2a6f3f (#82): deploy-dev.yml.
+    expect(naming.length).toBeGreaterThan(0);
+    expect(
+      naming
+        .filter(({ scan }) => scan.secretReferences < 1)
+        .map(({ file }) => file),
     ).toEqual([]);
   });
 
