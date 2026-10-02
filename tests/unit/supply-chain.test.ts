@@ -84,11 +84,29 @@ const ecosystemBlocks = () =>
     .filter((block) => /package-ecosystem:/.test(block));
 
 /**
- * Every `owner/repo` referenced at MORE THAN ONE sub-path, with the distinct
- * refs seen for it — the ones Dependabot would otherwise bump one sub-path at
- * a time, leaving the siblings behind.
+ * Every external `uses` value in the PARSED workflows, job calls and steps
+ * alike. Read independently of the line reader above, so a `uses:` written in
+ * a form that reader cannot see is caught by the difference (Refs #82).
  */
-const subPathRepos = (): [string, Set<string>][] => {
+const parsedUses = (): string[] =>
+  workflowFiles().flatMap((file) => {
+    const doc: unknown = parse(readFileSync(join(WORKFLOWS, file), 'utf8'));
+    const jobs =
+      isRecord(doc) && isRecord(doc.jobs) ? Object.values(doc.jobs) : [];
+    return jobs.flatMap((job) => {
+      if (!isRecord(job)) return [];
+      const steps: unknown[] = Array.isArray(job.steps) ? job.steps : [];
+      return [
+        job.uses,
+        ...steps.map((step) => (isRecord(step) ? step.uses : undefined)),
+      ]
+        .filter((uses): uses is string => typeof uses === 'string')
+        .filter((uses) => !uses.startsWith('./'));
+    });
+  });
+
+/** Every `owner/repo` the workflows reference, with the distinct refs seen for each. */
+const actionRepos = (): [string, Set<string>][] => {
   const refs = new Map<string, Set<string>>();
   for (const { text } of externalUses()) {
     const ref = text.match(/uses:\s*([^@\s]+)@/)?.[1];
@@ -99,12 +117,37 @@ const subPathRepos = (): [string, Set<string>][] => {
     seen.add(ref);
     refs.set(key, seen);
   }
-  return [...refs.entries()].filter(([, seen]) => seen.size > 1);
+  return [...refs.entries()];
 };
+
+/**
+ * Every `owner/repo` referenced at MORE THAN ONE sub-path — the ones
+ * Dependabot would otherwise bump one sub-path at a time, leaving the
+ * siblings behind.
+ */
+const subPathRepos = (): [string, Set<string>][] =>
+  actionRepos().filter(([, seen]) => seen.size > 1);
 
 describe('the CI supply chain is pinned', () => {
   it('there is something to check', () => {
-    expect(externalUses().length).toBeGreaterThan(0);
+    // Measured 6 at b2a6f3f (#82). Lower it only in the commit that removes one.
+    expect(externalUses().length).toBeGreaterThan(5);
+  });
+
+  it('the line reader sees every uses: the parsed workflows hold (Refs #82)', () => {
+    const read = externalUses().map(
+      ({ text }) => text.match(/uses:\s*["']?([^\s"']+)/)?.[1] ?? text,
+    );
+    expect(read.sort()).toEqual(parsedUses().sort());
+  });
+
+  it('reads every file that can hold a uses: line (Refs #82)', () => {
+    const tracked = trackedFiles();
+    expect(tracked, 'positive control').toContain('.github/workflows/ci.yml');
+    expect(
+      tracked.filter((path) => /(^|\/)action\.ya?ml$/.test(path)),
+      'a composite action’s steps sit outside .github/workflows, unscanned',
+    ).toEqual([]);
   });
 
   it('every third-party action is pinned to a full commit SHA', () => {
@@ -201,6 +244,11 @@ describe('Dependabot keeps the pins from rotting', () => {
    * one is added without a matching Dependabot group. Verified by mutation,
    * not by watching it pass.
    */
+  it('reads every action repo the workflows use (Refs #82)', () => {
+    // Measured 2 at b2a6f3f (#82): actions/checkout and actions/setup-node.
+    expect(actionRepos().length).toBeGreaterThan(1);
+  });
+
   it('an action repo used at more than one sub-path is grouped into one PR', () => {
     const config = configBody();
     const ungrouped = subPathRepos()
@@ -270,7 +318,8 @@ describe('Dependabot keeps the pins from rotting', () => {
     const ecosystems = (config.match(/package-ecosystem:/g) ?? []).length;
     const onDevelop = config.match(/target-branch:\s*["']?develop["']?/g) ?? [];
 
-    expect(ecosystems, 'no ecosystems declared').toBeGreaterThan(0);
+    // Measured 2 at b2a6f3f (#82): npm and github-actions.
+    expect(ecosystems, 'ecosystems declared').toBeGreaterThan(1);
     expect(
       onDevelop.length,
       'an ecosystem defaults to the default branch, bypassing the develop gate',
@@ -325,7 +374,7 @@ describe('the install is reproducible', () => {
     expect(tracked, 'positive control: git ls-files sees this repo').toContain(
       'package.json',
     );
-    expect(tracked.filter((path) => path.startsWith('node_modules/'))).toEqual(
+    expect(tracked.filter((path) => /(^|\/)node_modules\//.test(path))).toEqual(
       [],
     );
   });
