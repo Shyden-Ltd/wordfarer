@@ -117,9 +117,15 @@ describe('this repo’s workflows stop every job within minutes', () => {
 
   it('checks every job it finds (liveness)', () => {
     const scans = scanAll();
+    // Measured 2 workflows at b2a6f3f (#82). Lower it only in the commit that removes one.
     expect(scans.length, 'positive control: workflows found').toBeGreaterThan(
-      0,
+      1,
     );
+    // Measured 4 at b2a6f3f (#82): 3 jobs judged and 1 reusable-workflow call.
+    expect(
+      scans.reduce((n, { scan }) => n + scan.checked + scan.calls.length, 0),
+      'jobs judged, counted as jobs, not files',
+    ).toBeGreaterThan(3);
     expect(
       scans.filter(({ scan }) => scan.checked + scan.calls.length === 0),
       'every workflow has a job the scan looked at',

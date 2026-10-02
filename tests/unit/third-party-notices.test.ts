@@ -21,6 +21,15 @@ import {
 const lock = JSON.parse(readFileSync('package-lock.json', 'utf8')) as Lockfile;
 const listing = readFileSync('THIRD-PARTY-NOTICES.md', 'utf8');
 
+/**
+ * Direct dependencies per shipped workspace, measured at b2a6f3f (#82). Each
+ * floor sits at measured - 1; lower one only in the commit that removes a
+ * dependency. A workspace with no entry fails, so a new one is measured.
+ */
+const MEASURED_DIRECT: Readonly<Record<string, number>> = {
+  'packages/core': 8,
+};
+
 function directDependencies(workspace: string): string[] {
   const pkg = JSON.parse(readFileSync(`${workspace}/package.json`, 'utf8')) as {
     dependencies?: Record<string, string>;
@@ -38,7 +47,10 @@ describe('THIRD-PARTY-NOTICES.md', () => {
     const direct = directDependencies(workspace);
 
     it(`${workspace} has direct dependencies to check`, () => {
-      expect(direct.length).toBeGreaterThan(0);
+      expect(
+        direct.length,
+        `measure ${workspace} and add it to MEASURED_DIRECT`,
+      ).toBeGreaterThan((MEASURED_DIRECT[workspace] ?? Infinity) - 1);
     });
 
     for (const name of direct)
@@ -50,9 +62,11 @@ describe('THIRD-PARTY-NOTICES.md', () => {
   it('names every package of the closure, which is larger than the direct list', () => {
     const names = bundledPackages(lock).map((p) => p.name);
     // The closure is larger than the direct list: @stdlib's six pull in 152.
+    // Measured 152 @stdlib and 164 in all at b2a6f3f (#82); floors at measured - 1.
     expect(
       names.filter((n) => n.startsWith('@stdlib/')).length,
-    ).toBeGreaterThan(100);
+    ).toBeGreaterThan(151);
+    expect(names.length).toBeGreaterThan(163);
     // runtime population: the closure bundledPackages computes from the lockfile.
     // Listing it at collection would run the code under test there.
     for (const name of names) {
@@ -107,7 +121,8 @@ describe('NOTICE', () => {
   );
 
   it('has bundled Apache-2.0 @stdlib packages to name', () => {
-    expect(stdlib.length).toBeGreaterThan(0);
+    // Measured 6 at b2a6f3f (#82). Lower it only in the commit that removes one.
+    expect(stdlib.length).toBeGreaterThan(5);
   });
 
   for (const name of stdlib)

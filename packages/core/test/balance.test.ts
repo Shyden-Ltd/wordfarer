@@ -29,8 +29,9 @@ describe('BALANCE', () => {
         expect(Object.isFrozen(value), path).toBe(true);
       }
     });
-    // Liveness: the walk reached the nested tables and arrays.
-    expect(containers.length).toBeGreaterThanOrEqual(18);
+    // Liveness: the walk reached the nested tables and arrays. Measured 31
+    // at b2a6f3f (#82); raise it with BALANCE, lower it only when BALANCE shrinks.
+    expect(containers.length).toBeGreaterThan(30);
     expect(() => {
       (BALANCE.encounters as { costGrowth: number }).costGrowth = 2;
     }).toThrow(TypeError);
@@ -50,7 +51,8 @@ describe('BALANCE', () => {
         );
       }
     });
-    expect(leaves.length).toBeGreaterThanOrEqual(40);
+    // Measured 74 at b2a6f3f (#82); raise it with BALANCE, lower it only when BALANCE shrinks.
+    expect(leaves.length).toBeGreaterThan(73);
   });
 
   it.each<[string, (b: Balance) => unknown, unknown]>([

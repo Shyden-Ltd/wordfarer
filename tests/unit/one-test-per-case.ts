@@ -31,7 +31,7 @@ const MARKERS = ['runtime population:', 'one scenario:'];
 /** Array methods that run their function argument once per element. */
 const ITERATING = new Set(['forEach', 'map', 'every', 'some']);
 
-/** Run modifiers of `it`/`test`; `describe`, `step`, `use` and hooks are not tests. */
+/** Run modifiers of `it`/`test`. Members that declare no test are in NOT_TESTS. */
 const TEST_MODIFIERS = new Set([
   'only',
   'skip',
@@ -45,22 +45,83 @@ const TEST_MODIFIERS = new Set([
 /** Table forms, called with a table and then with the title: `it.each(XS)('t', fn)`. */
 const TABLE_FORMS = new Set(['each', 'for']);
 
+/** Members of `it`/`test` that declare no test: suites, hooks, steps and fixtures. */
+const NOT_TESTS = new Set([
+  'describe',
+  'beforeAll',
+  'beforeEach',
+  'afterAll',
+  'afterEach',
+  'step',
+  'use',
+  'extend',
+  'info',
+  'setTimeout',
+  'todo',
+]);
+
 const isTestName = (node: ts.Expression): boolean =>
   ts.isIdentifier(node) && (node.text === 'it' || node.text === 'test');
 
-const isTestCall = (call: ts.CallExpression): boolean => {
-  const callee = call.expression;
-  if (isTestName(callee)) return true;
-  if (ts.isPropertyAccessExpression(callee))
-    return (
-      isTestName(callee.expression) && TEST_MODIFIERS.has(callee.name.text)
-    );
+/** The members of a chain rooted at `it` or `test` (`['skip', 'each']` for `it.skip.each`), or null. */
+const membersOf = (callee: ts.Expression): string[] | null => {
+  const members: string[] = [];
+  let at = callee;
+  while (ts.isPropertyAccessExpression(at)) {
+    members.unshift(at.name.text);
+    at = at.expression;
+  }
+  return isTestName(at) ? members : null;
+};
+
+const isFunction = (
+  node: ts.Node | undefined,
+): node is ts.ArrowFunction | ts.FunctionExpression =>
+  node !== undefined &&
+  (ts.isArrowFunction(node) || ts.isFunctionExpression(node));
+
+/**
+ * A Playwright annotation, `test.skip(condition, reason)` or `test.slow()`:
+ * a modifier called with no body and no title, or with a predicate first.
+ */
+const isAnnotation = (call: ts.CallExpression): boolean => {
+  const [first] = call.arguments;
+  if (isFunction(first)) return true;
   return (
-    ts.isCallExpression(callee) &&
-    ts.isPropertyAccessExpression(callee.expression) &&
-    isTestName(callee.expression.expression) &&
-    TABLE_FORMS.has(callee.expression.name.text)
+    !call.arguments.some(isFunction) &&
+    (first === undefined ||
+      !(
+        ts.isStringLiteral(first) ||
+        ts.isTemplateExpression(first) ||
+        ts.isNoSubstitutionTemplateLiteral(first)
+      ))
   );
+};
+
+/**
+ * What a call on `it` or `test` is: a test; the inner call of a table form,
+ * awaiting its title; another member (a suite, a hook, an annotation); one
+ * the reader does not know, which is refused rather than skipped; or no call
+ * on `it` or `test` at all.
+ */
+type Kind = 'test' | 'table' | 'other' | 'unknown' | 'none';
+
+const kindOf = (call: ts.CallExpression): Kind => {
+  const callee = call.expression;
+  if (ts.isCallExpression(callee))
+    return kindOf(callee) === 'table' ? 'test' : 'none';
+  const members = membersOf(callee);
+  if (members === null) return 'none';
+  const [first = '', ...rest] = members;
+  if (members.length === 0) return 'test';
+  if (NOT_TESTS.has(first)) return 'other';
+  const last = rest.at(-1) ?? first;
+  const table = TABLE_FORMS.has(last);
+  const modifiers = table ? members.slice(0, -1) : members;
+  if (!modifiers.every((member) => TEST_MODIFIERS.has(member)))
+    return 'unknown';
+  if (table) return 'table';
+  return isAnnotation(call) ? 'other' : 'test';
 };
 
 /**
@@ -70,10 +131,7 @@ const isTestCall = (call: ts.CallExpression): boolean => {
 const callbackOf = (
   call: ts.CallExpression,
 ): ts.ArrowFunction | ts.FunctionExpression | null =>
-  call.arguments.find(
-    (arg): arg is ts.ArrowFunction | ts.FunctionExpression =>
-      ts.isArrowFunction(arg) || ts.isFunctionExpression(arg),
-  ) ?? null;
+  call.arguments.find(isFunction) ?? null;
 
 /** A title as written: a template keeps its `${…}`, so an entry naming it is stable. */
 const titleOf = (sf: ts.SourceFile, call: ts.CallExpression): string => {
@@ -190,12 +248,24 @@ const loopParts = (
 };
 
 /**
- * Every loop inside a test body that asserts, or changes page state, on each
- * pass, unless a marker declares it a runtime population or one scenario. A
- * loop OUTSIDE a test that generates one test per case is the shape this asks
- * for, so it is never reported.
+ * What the detector read in one file. The verdict carries its own population,
+ * so an empty `looped` can be told from a reader that saw nothing (Refs #82).
  */
-export function loopedCases(source: string, fileName: string): LoopedCase[] {
+export interface TestScan {
+  /** Test calls read: `it` and `test`, their run modifiers and table forms. */
+  readonly tests: number;
+  /**
+   * Every loop inside a test body that asserts, or changes page state, on
+   * each pass, unless a marker declares it a runtime population or one
+   * scenario. A loop OUTSIDE a test that generates one test per case is the
+   * shape this asks for, so it is never reported.
+   */
+  readonly looped: LoopedCase[];
+  /** Calls on `it` or `test` the reader could not read, by line: refused, never skipped. */
+  readonly unclassified: string[];
+}
+
+export function scanTests(source: string, fileName: string): TestScan {
   const sf = ts.createSourceFile(
     fileName,
     source,
@@ -203,28 +273,44 @@ export function loopedCases(source: string, fileName: string): LoopedCase[] {
     true,
   );
   const cases: LoopedCase[] = [];
+  const unclassified: string[] = [];
+  let tests = 0;
+  const lineOf = (node: ts.Node): number =>
+    sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
   const inTest = (title: string, node: ts.Node): void => {
     const loop = loopParts(sf, node);
     if (loop && actsPerPass(loop.body) && !declared(sf, node))
       cases.push({
         test: title,
         loop: loop.header,
-        line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
+        line: lineOf(node),
       });
     ts.forEachChild(node, (child) => {
       inTest(title, child);
     });
   };
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && isTestCall(node)) {
-      const callback = callbackOf(node);
-      if (callback) {
-        inTest(titleOf(sf, node), callback.body);
-        return;
+    if (ts.isCallExpression(node)) {
+      const kind = kindOf(node);
+      const callee = node.expression.getText(sf);
+      if (kind === 'unknown')
+        unclassified.push(
+          `line ${String(lineOf(node))}: ${callee} is neither a test form nor a known non-test`,
+        );
+      if (kind === 'test') {
+        const callback = callbackOf(node);
+        if (callback) {
+          tests += 1;
+          inTest(titleOf(sf, node), callback.body);
+          return;
+        }
+        unclassified.push(
+          `line ${String(lineOf(node))}: ${callee}('${titleOf(sf, node)}') has no inline body to read`,
+        );
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return cases;
+  return { tests, looped: cases, unclassified };
 }
