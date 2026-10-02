@@ -138,14 +138,13 @@ describe(
       const fn = UNARY[name];
       const { min, max, edges } = DOMAIN[name];
 
-      it(`${name} at its domain edges`, () => {
-        for (const x of edges) {
+      for (const x of edges)
+        it(`${name}(${String(x)}), at its domain edge`, () => {
           expect(
             ulps(fn(x), reference(name, x)),
             `${name}(${String(x)})`,
           ).toBeLessThanOrEqual(2n);
-        }
-      });
+        });
 
       it(`${name} on 2,000 random inputs`, () => {
         fc.assert(

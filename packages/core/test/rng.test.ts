@@ -132,44 +132,39 @@ describe('named sub-streams', () => {
     expect(createStreams(8, NAMES)).not.toEqual(a);
   });
 
-  it('are independent: drawing from one never changes another', () => {
-    let longest = 0;
-    fc.assert(
-      fc.property(
-        fc.array(fc.constantFrom(...NAMES), { maxLength: 60, size: 'max' }),
-        (order) => {
-          longest = Math.max(longest, order.length);
-          let streams = createStreams(7, NAMES);
-          const seen: Record<string, number[]> = {
-            recall: [],
-            latency: [],
-            opens: [],
-          };
-          for (const name of order) {
-            const r = drawFrom(streams, name);
-            seen[name]?.push(r.value);
-            streams = r.streams;
-          }
-          // Each stream's values equal drawing that stream alone, whatever the
-          // interleaving with the others.
-          for (const name of NAMES) {
+  // Each stream's values equal drawing that stream alone, whatever the
+  // interleaving with the others: one property per stream.
+  for (const name of NAMES)
+    it(`are independent: drawing the others never changes ${name}`, () => {
+      let longest = 0;
+      fc.assert(
+        fc.property(
+          fc.array(fc.constantFrom(...NAMES), { maxLength: 60, size: 'max' }),
+          (order) => {
+            longest = Math.max(longest, order.length);
+            let streams = createStreams(7, NAMES);
+            const seen: number[] = [];
+            for (const drawn of order) {
+              const r = drawFrom(streams, drawn);
+              if (drawn === name) seen.push(r.value);
+              streams = r.streams;
+            }
             let alone = createStreams(7, NAMES);
             const solo: number[] = [];
-            for (let i = 0; i < (seen[name]?.length ?? 0); i++) {
+            for (let i = 0; i < seen.length; i++) {
               const r = drawFrom(alone, name);
               solo.push(r.value);
               alone = r.streams;
             }
-            expect(seen[name]).toEqual(solo);
-          }
-        },
-      ),
-    );
-    // fast-check's default size never generates more than 10 elements
-    // (measured, #27), whatever maxLength says: the property must reach
-    // longer interleavings than that.
-    expect(longest).toBeGreaterThan(10);
-  });
+            expect(seen).toEqual(solo);
+          },
+        ),
+      );
+      // fast-check's default size never generates more than 10 elements
+      // (measured, #27), whatever maxLength says: the property must reach
+      // longer interleavings than that.
+      expect(longest).toBeGreaterThan(10);
+    });
 
   it('refuse an unknown name, a duplicate and a name outside [a-z0-9-]', () => {
     expect(() => drawFrom(createStreams(1, NAMES), 'missing')).toThrow(

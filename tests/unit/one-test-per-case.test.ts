@@ -269,10 +269,6 @@ for (const name of NAMES)
  */
 const BURN_DOWN: readonly string[] = [
   "apps/sync-worker/test/health.test.ts :: refuses every method but GET, naming the one it allows :: for (const method of ['POST', 'PUT', 'DELETE', 'PATCH'])",
-  'packages/core/test/det-math.test.ts :: ${name} at its domain edges :: for (const x of edges)',
-  'packages/core/test/encounters.test.ts :: the n-th purchase costs c0 x 1.15^n, n = 0..2000 :: for (let owned = 0; owned <= 2000; owned++)',
-  'packages/core/test/num.test.ts :: gives exact powers of ten :: for (const k of [0, 1, 7, 300, 4000, -300])',
-  'packages/core/test/rng.test.ts :: are independent: drawing from one never changes another :: for (const name of NAMES)',
   'packages/core/test/synthetic-course.test.ts :: has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes :: for (const card of r.cultureCards)',
   'packages/core/test/synthetic-course.test.ts :: has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes :: for (const r of course().regions)',
   'packages/core/test/synthetic-course.test.ts :: has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes :: for (const set of sets)',

@@ -196,11 +196,10 @@ describe('Num.pow, built from det-math', () => {
     );
   });
 
-  it('gives exact powers of ten', () => {
-    for (const k of [0, 1, 7, 300, 4000, -300]) {
+  for (const k of [0, 1, 7, 300, 4000, -300])
+    it(`gives 10^${String(k)} exactly`, () => {
       expect(Num.toTuple(Num.pow(Num.from(10), k))).toEqual([1, k]);
-    }
-  });
+    });
 
   it('pins the bits of the cost curve far past 1e308', () => {
     // Golden values, measured 2026-10-01 and within the accuracy bound above
