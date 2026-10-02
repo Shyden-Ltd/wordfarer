@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { loopedCases, type LoopedCase } from './one-test-per-case';
+import { scanTests, type LoopedCase, type TestScan } from './one-test-per-case';
 import { trackedFiles } from './tracked-files';
 
 /**
@@ -21,8 +21,8 @@ import { trackedFiles } from './tracked-files';
  * passes carry state into the next. Comments are found by position, so the
  * same words in a string do not count.
  */
-const found = (source: string): readonly LoopedCase[] =>
-  loopedCases(source, 'fixture.test.ts');
+const read = (source: string): TestScan => scanTests(source, 'fixture.test.ts');
+const found = (source: string): readonly LoopedCase[] => read(source).looped;
 
 /** A fixture whose loop sits on line 3, inside a test titled `t`. */
 const inTest = (loop: string): string => `
@@ -131,10 +131,11 @@ ${close}`),
       ).toEqual([{ test: 't', loop: 'for (const c of CASES)', line: 3 }]);
     });
 
-  const ALLOWED: readonly (readonly [string, string])[] = [
+  const ALLOWED: readonly (readonly [string, string, number])[] = [
     [
       'a loop that generates one test per case',
       'for (const c of CASES) it(`${c}`, () => expect(c).toBe(1));',
+      1,
     ],
     [
       'a loop with no assertion or page change in it',
@@ -143,43 +144,53 @@ ${close}`),
   for (const c of CASES) out.push(c);
   expect(out).toEqual(CASES);
 });`,
+      1,
     ],
     [
       'a loop in a describe body',
       `describe('d', () => {
   for (const c of CASES) expect(c).toBe(1);
 });`,
+      0,
     ],
     [
       'a loop in test.describe',
       `test.describe('d', () => {
   for (const c of CASES) expect(c).toBe(1);
 });`,
+      0,
     ],
     [
       'a loop in a hook',
       `beforeEach(() => {
   for (const c of CASES) expect(c).toBe(1);
 });`,
+      0,
     ],
     [
       'a runtime population, declared above the loop',
       inTest(`// runtime population: the rows f() returned
   for (const r of f()) expect(r).toBe(1);`),
+      1,
     ],
     [
       'one scenario, declared above the loop',
       inTest(`// one scenario: each answer moves the state the next one reads
   for (const a of ANSWERS) expect((s = answer(s, a))).toBeDefined();`),
+      1,
     ],
     [
       'a runtime population, declared above the statement holding the loop',
       inTest(`// runtime population: the rows f() returned
   await Promise.all(f().map(async (r) => expect(r).toBe(1)));`),
+      1,
     ],
   ];
-  for (const [what, source] of ALLOWED)
+  for (const [what, source, tests] of ALLOWED)
     it(`leaves alone ${what}`, () => {
+      expect(read(source).tests, 'the tests the fixture holds were read').toBe(
+        tests,
+      );
       expect(found(source)).toEqual([]);
     });
 
@@ -261,6 +272,71 @@ for (const name of NAMES)
   });
 });
 
+describe('what the detector read (Refs #82)', () => {
+  it('counts every test call it read: bare, modified, table, nested in a describe', () => {
+    expect(
+      read(`
+it('a', () => {});
+test.skip('b', () => {});
+it.each(XS)('c %s', (x) => {});
+test.describe('d', () => {
+  test('e', async () => {});
+});
+test.beforeAll(() => {});
+describe('f', () => {});`).tests,
+    ).toBe(4);
+  });
+
+  it('reads a chained modifier and its table form as one test, and judges its body', () => {
+    const scan = read(`
+it.skip.each(XS)('t %s', () => {
+  for (const c of CASES) expect(c).toBe(1);
+});`);
+    expect(scan.tests).toBe(1);
+    expect(scan.looped.map((c) => c.loop)).toEqual(['for (const c of CASES)']);
+  });
+
+  it('reads a describe modifier as no test and refuses nothing', () => {
+    const scan = read(`test.describe.parallel('d', () => {});
+test.describe.configure({ mode: 'serial' });`);
+    expect(scan.tests).toBe(0);
+    expect(scan.unclassified).toEqual([]);
+  });
+
+  it('reads a Playwright annotation inside a test as no test', () => {
+    const scan = read(`
+test('t', async ({ isMobile }) => {
+  test.skip(isMobile, 'no hover on touch');
+  test.slow();
+  test.fixme(({ browserName }) => browserName === 'webkit', 'no WebGL');
+});`);
+    expect(scan.tests).toBe(1);
+    expect(scan.unclassified).toEqual([]);
+  });
+
+  it('refuses a test whose body it cannot see, by line and title', () => {
+    expect(
+      read(`const body = () => {};
+it('named', body);`).unclassified,
+    ).toEqual(["line 2: it('named') has no inline body to read"]);
+  });
+
+  it('refuses a member of it or test it does not know, by line and name', () => {
+    expect(
+      read(`
+it.todoo('x', () => {});
+test.skip.sometimes('y', () => {});`).unclassified,
+    ).toEqual([
+      'line 2: it.todoo is neither a test form nor a known non-test',
+      'line 3: test.skip.sometimes is neither a test form nor a known non-test',
+    ]);
+  });
+
+  it('counts a refused call as no test', () => {
+    expect(read(`it.todoo('x', () => {});`).tests).toBe(0);
+  });
+});
+
 /**
  * Every looped site in the suite on the day #58 landed (24), split by #59 to
  * #62 and empty since. `file :: test :: loop`. The guard fails on a site
@@ -272,15 +348,31 @@ const BURN_DOWN: readonly string[] = [];
 
 const TEST_FILE = /\.(test|spec)\.ts$/;
 
-/** Every looped site in every tracked test file, scanned inside each test, never at collection. */
-const scan = (): { files: string[]; sites: string[] } => {
+/** A test call in raw text: `it(`, `test.skip(`, `it.each(`, never `regex.test(`. */
+const RAW_TEST_CALL = /(^|[^\w.$])(it|test)(\.\w+)*\s*\(/m;
+
+/** Every tracked test file and what the detector read in it, scanned inside each test, never at collection. */
+const scan = () => {
   const files = trackedFiles().filter((path) => TEST_FILE.test(path));
-  const sites = files.flatMap((file) =>
-    loopedCases(readFileSync(file, 'utf8'), file).map(
-      (site) => `${file} :: ${site.test} :: ${site.loop}`,
+  const read = files.map((file) => {
+    const source = readFileSync(file, 'utf8');
+    return { file, source, scan: scanTests(source, file) };
+  });
+  const withTestCalls = read.filter(({ source }) => RAW_TEST_CALL.test(source));
+  return {
+    files,
+    tests: read.reduce((n, { scan }) => n + scan.tests, 0),
+    sites: read.flatMap(({ file, scan }) =>
+      scan.looped.map((site) => `${file} :: ${site.test} :: ${site.loop}`),
     ),
-  );
-  return { files, sites };
+    unclassified: read.flatMap(({ file, scan }) =>
+      scan.unclassified.map((what) => `${file} ${what}`),
+    ),
+    withTestCalls: withTestCalls.length,
+    unread: withTestCalls
+      .filter(({ scan }) => scan.tests < 1)
+      .map(({ file }) => file),
+  };
 };
 
 /** `from` minus `taken`, one occurrence per match, so two identical sites need two entries. */
@@ -299,7 +391,24 @@ describe('the suite', () => {
     const { files } = scan();
     expect(files).toContain('tests/unit/one-test-per-case.test.ts');
     expect(files).toContain('tests/engines/golden-vectors.spec.ts');
-    expect(files.length).toBeGreaterThanOrEqual(27);
+    // Measured 32 at b2a6f3f (#82). Lower it only in the commit that removes a test file.
+    expect(files.length).toBeGreaterThan(31);
+  });
+
+  it('reads the tests in them, counted as tests, not files (Refs #82)', () => {
+    // Measured 386 on #82's branch. Lower it only in the commit that removes tests.
+    expect(scan().tests).toBeGreaterThan(385);
+  });
+
+  it('reads at least one test in every file whose text holds a test call', () => {
+    const { withTestCalls, unread } = scan();
+    // Measured 32 at b2a6f3f (#82): every test file holds one.
+    expect(withTestCalls).toBeGreaterThan(31);
+    expect(unread).toEqual([]);
+  });
+
+  it('classifies every call on it and test, refusing by name what it cannot read', () => {
+    expect(scan().unclassified).toEqual([]);
   });
 
   it('loops no known population inside a test beyond the burn-down list', () => {
