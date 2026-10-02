@@ -269,17 +269,6 @@ for (const name of NAMES)
  */
 const BURN_DOWN: readonly string[] = [
   "apps/sync-worker/test/health.test.ts :: refuses every method but GET, naming the one it allows :: for (const method of ['POST', 'PUT', 'DELETE', 'PATCH'])",
-  'packages/core/test/synthetic-course.test.ts :: has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes :: for (const card of r.cultureCards)',
-  'packages/core/test/synthetic-course.test.ts :: has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes :: for (const r of course().regions)',
-  'packages/core/test/synthetic-course.test.ts :: has 3 regions of 4 destinations, 150 lexicon items, 6 Encounters, 12 cards in sets and 4 grammar nodes :: for (const set of sets)',
-  'packages/core/test/synthetic-course.test.ts :: orders each destination A1 first, and gives every grammar root words to multiply :: for (const d of r.destinations)',
-  'packages/core/test/synthetic-course.test.ts :: orders each destination A1 first, and gives every grammar root words to multiply :: for (const node of r.grammarNodes)',
-  'packages/core/test/synthetic-course.test.ts :: orders each destination A1 first, and gives every grammar root words to multiply :: for (const r of course().regions)',
-  'packages/core/test/synthetic-course.test.ts :: orders each destination A1 first, and gives every grammar root words to multiply :: for (const root of node.roots)',
-  'packages/core/test/synthetic-course.test.ts :: places festival windows on the bot calendar, as integer half-open wall-clock spans :: for (const w of windows)',
-  'packages/core/test/synthetic-course.test.ts :: prices Encounters positively and ascending within a region :: for (const r of course().regions)',
-  'packages/core/test/synthetic-course.test.ts :: uses 10 tags, each on at least one Encounter and one item, and no other tag :: for (const t of [...onEncounters, ...onItems, ...onCards])',
-  'packages/core/test/synthetic-course.test.ts :: uses 10 tags, each on at least one Encounter and one item, and no other tag :: for (const t of course().tags)',
   "packages/lockdown/test/lockdown.test.ts :: leaves the production API host untouched, robots.txt included :: for (const path of ['/health', '/robots.txt'])",
   'tests/engines/det-math.spec.ts :: det-math gives the same bits as Node on 100,000 inputs per function :: for (const fn of FUNCTIONS)',
 ];
