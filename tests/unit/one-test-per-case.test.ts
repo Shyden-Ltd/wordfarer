@@ -287,6 +287,15 @@ describe('f', () => {});`).tests,
     ).toBe(4);
   });
 
+  it('reads a test body written as a function expression, and judges it', () => {
+    const scan = read(`
+it('t', function () {
+  for (const c of CASES) expect(c).toBe(1);
+});`);
+    expect(scan.tests).toBe(1);
+    expect(scan.looped.map((c) => c.loop)).toEqual(['for (const c of CASES)']);
+  });
+
   it('reads a chained modifier and its table form as one test, and judges its body', () => {
     const scan = read(`
 it.skip.each(XS)('t %s', () => {
