@@ -83,7 +83,9 @@ function json(state: GameState): string {
 
 // The random-sequence property replays games through the real actions: 1.8 s
 // alone, 9.8 s measured inside the full core suite on a loaded machine (#28).
-// The property is correctness, so a 5 s timeout would guard only the load.
+// AC6 walks every hour bucket from the anchor (D-M1-2.3) over spans of up to
+// 216 h: 1.3 s alone, over 5 s in the full suite (#28; 53 ms before buckets).
+// Both properties are correctness, so a 5 s timeout would guard only the load.
 const PROPERTY_TIMEOUT_MS = 60_000;
 
 function relativeError(got: Num, want: Num): number {
@@ -98,6 +100,9 @@ describe('initialState', () => {
       wall: START,
       anchor: { sim: 0, understanding: [0, 0] },
       owned: {},
+      insight: [0, 0],
+      words: {},
+      memorySince: 0,
     });
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
   });
@@ -219,21 +224,28 @@ const arbState = fc
       understanding: Num.toTuple(Num.from(r.understanding)),
     },
     owned: { tea: r.tea, market: r.market },
+    insight: Num.toTuple(Num.from(0)),
+    words: {},
+    memorySince: simMs(r.anchorSim),
   }));
 
 describe('integrate (AC6)', () => {
-  it('integrate(integrate(s, a), b) deep-equals integrate(s, a + b), bit for bit', () => {
-    const gap = fc.integer({ min: 0, max: 72 * HOUR_MS });
-    fc.assert(
-      fc.property(arbState, gap, gap, (s, a, b) => {
-        const split = integrate(integrate(s, a), b);
-        const whole = integrate(s, a + b);
-        expect(split).toEqual(whole);
-        expect(u(split)).toEqual(u(whole));
-      }),
-      { numRuns: 1000 },
-    );
-  });
+  it(
+    'integrate(integrate(s, a), b) deep-equals integrate(s, a + b), bit for bit',
+    { timeout: PROPERTY_TIMEOUT_MS },
+    () => {
+      const gap = fc.integer({ min: 0, max: 72 * HOUR_MS });
+      fc.assert(
+        fc.property(arbState, gap, gap, (s, a, b) => {
+          const split = integrate(integrate(s, a), b);
+          const whole = integrate(s, a + b);
+          expect(split).toEqual(whole);
+          expect(u(split)).toEqual(u(whole));
+        }),
+        { numRuns: 1000 },
+      );
+    },
+  );
 
   it('moves both clocks by the same amount', () => {
     const s = stateWith({ tea: 1 }, 0, 500);

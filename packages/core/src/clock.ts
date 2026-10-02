@@ -23,6 +23,9 @@ export type WallMs = number & { readonly [wallBrand]: true };
 /** One clock hour: the width of a production bucket. */
 export const HOUR_MS = 3_600_000;
 
+/** One day: the unit FSRS measures stability and elapsed time in. */
+export const DAY_MS = 86_400_000;
+
 function checkTime(n: number, kind: string): number {
   if (!Number.isSafeInteger(n) || n < 0) {
     throw new RangeError(
