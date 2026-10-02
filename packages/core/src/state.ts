@@ -36,9 +36,18 @@ export interface GameState {
    * bucket's start, whichever is later (design §2.2 item 3).
    */
   readonly memorySince: SimMs;
+  /** Passport Stamps held: what stamp upgrades are paid from. */
+  readonly stamps: number;
+  /**
+   * Every stamp ever earned: the global production bonus counts these, so
+   * spending stamps never lowers it (operator, 2026-10-02, #29).
+   */
+  readonly stampsEarned: number;
+  /** Upgrade levels, by upgrade id. An id that is absent is at level 0. */
+  readonly upgrades: Readonly<Record<string, number>>;
 }
 
-/** A new game at wall time `wall`: nothing owned, no Understanding, no words. */
+/** A new game at wall time `wall`: nothing owned, no currency, no words, no upgrades. */
 export function initialState(wall: WallMs): GameState {
   const start = simMs(0);
   return {
@@ -49,6 +58,9 @@ export function initialState(wall: WallMs): GameState {
     insight: Num.toTuple(Num.from(0)),
     words: {},
     memorySince: start,
+    stamps: 0,
+    stampsEarned: 0,
+    upgrades: {},
   };
 }
 

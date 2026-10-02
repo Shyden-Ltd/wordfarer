@@ -105,6 +105,9 @@ describe('initialState', () => {
       insight: [0, 0],
       words: {},
       memorySince: 0,
+      stamps: 0,
+      stampsEarned: 0,
+      upgrades: {},
     });
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
   });
@@ -217,6 +220,8 @@ const arbState = fc
     anchorSim: fc.integer({ min: 0, max: 1e12 }),
     lead: fc.integer({ min: 0, max: 72 * HOUR_MS }),
     wall: fc.integer({ min: 1.7e12, max: 1.9e12 }),
+    stampsEarned: fc.integer({ min: 0, max: 20 }),
+    phrasebook: fc.boolean(),
   })
   .map((r): GameState => ({
     sim: simMs(r.anchorSim + r.lead),
@@ -229,6 +234,9 @@ const arbState = fc
     insight: Num.toTuple(Num.from(0)),
     words: {},
     memorySince: simMs(r.anchorSim),
+    stamps: 0,
+    stampsEarned: r.stampsEarned,
+    upgrades: r.phrasebook ? { 'phrasebook:food': 1 } : {},
   }));
 
 describe('integrate (AC6)', () => {

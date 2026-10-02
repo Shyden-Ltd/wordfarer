@@ -27,14 +27,44 @@ export {
   type RngState,
   type RngStreams,
 } from './rng';
-export { BALANCE, type Balance, type Rank } from './balance';
-export { encounterOutput, milestonesReached, purchaseCost } from './encounters';
+export {
+  BALANCE,
+  type Balance,
+  type InsightUpgradeId,
+  type Rank,
+  type StampUpgradeId,
+} from './balance';
+export {
+  encounterOutput,
+  milestoneFactor,
+  milestonesReached,
+  purchaseCost,
+} from './encounters';
 export {
   encounterRate,
   producedBetween,
   rateAt,
+  rateBreakdown,
+  totalRate,
   wordMultiplier,
+  type EncounterRate,
+  type RateLine,
 } from './production';
+export {
+  encounterCostFactor,
+  findUpgrade,
+  globalMultiplier,
+  journeyDurationFactor,
+  journeySlots,
+  offlineCapMs,
+  pemanduIntervalsMs,
+  phrasebookId,
+  startingUnderstanding,
+  upgradeCatalogue,
+  upgradeLevel,
+  type Upgrade,
+  type UpgradeCurrency,
+} from './upgrades';
 export {
   RANKS,
   type MemoryCard,
@@ -47,6 +77,7 @@ export {
   answerPractice,
   answerReview,
   buyEncounter,
+  buyUpgrade,
   integrate,
   listen,
   pickUpWord,
