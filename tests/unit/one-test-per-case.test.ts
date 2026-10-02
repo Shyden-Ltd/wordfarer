@@ -298,7 +298,7 @@ describe('the suite', () => {
   it('scans every tracked test file, this one included', () => {
     const { files } = scan();
     expect(files).toContain('tests/unit/one-test-per-case.test.ts');
-    expect(files).toContain('tests/engines/det-math.spec.ts');
+    expect(files).toContain('tests/engines/golden-vectors.spec.ts');
     expect(files.length).toBeGreaterThanOrEqual(27);
   });
 

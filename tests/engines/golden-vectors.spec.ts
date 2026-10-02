@@ -7,7 +7,8 @@ import {
 } from '../../packages/core/test/golden-vectors';
 
 /**
- * Cross-engine determinism of det-math (M1 design §2.1 and §7, #26 AC10).
+ * Cross-engine determinism of det-math, the mean retrievability and the FSRS
+ * review (M1 design §2.1 and §7, #26 AC10, #28).
  *
  * The golden vectors are bundled exactly as a shipped build would bundle
  * core, run in each browser engine, and their bit digests compared with the
@@ -43,13 +44,11 @@ test.beforeAll(async () => {
 });
 
 for (const fn of FUNCTIONS)
-  test(`det-math ${fn} gives the same bits as Node on 100,000 inputs`, async ({
+  test(`${fn} gives the same bits as Node on 100,000 vectors`, async ({
     page,
     browserName,
   }) => {
-    await page.setContent(
-      '<!doctype html><title>det-math golden vectors</title>',
-    );
+    await page.setContent('<!doctype html><title>golden vectors</title>');
     await page.addScriptTag({ content: bundle });
     const engine = await page.evaluate(
       (name) =>
