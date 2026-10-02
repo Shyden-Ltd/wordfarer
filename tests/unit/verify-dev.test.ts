@@ -183,8 +183,17 @@ describe('verifyDev', () => {
   let served = SHA;
   let gated = true;
   let tagged = true;
+  /** Looks at the authorised page and at /health that still find OLD, each. */
+  let staleLooks = 0;
+  /** The authorised page request, counted from 1, whose connection is dropped. */
+  let dropAuthorisedAt = 0;
+  let dropRobots = false;
+  /** The next unauthenticated page request is redirected instead of challenged. */
+  let redirectGateOnce = false;
   let requests = 0;
-  let dropAuthorised = 0;
+  let authorisedRequests = 0;
+  let webStale = 0;
+  let healthStale = 0;
   const seenAuthorization: string[] = [];
 
   beforeAll(async () => {
@@ -196,28 +205,43 @@ describe('verifyDev', () => {
       const authorization = req.headers.authorization ?? '';
       seenAuthorization.push(authorization);
       const authorised = authorization === basicAuthorization(PASSWORD);
-      if (authorised && dropAuthorised > 0) {
-        dropAuthorised -= 1;
-        req.socket.destroy();
-        return;
-      }
       if (req.url === '/health') {
+        healthStale += 1;
+        const commit = healthStale <= staleLooks ? OLD : served;
         res.writeHead(200, { 'content-type': 'application/json', ...tag });
-        res.end(JSON.stringify({ ok: true, commit: served, db: 'ok' }));
+        res.end(JSON.stringify({ ok: true, commit, db: 'ok' }));
         return;
       }
       if (req.url === '/robots.txt') {
+        if (dropRobots) {
+          req.socket.destroy();
+          return;
+        }
         res.writeHead(200, { 'content-type': 'text/plain', ...tag });
         res.end(ROBOTS);
         return;
       }
+      if (authorised) {
+        authorisedRequests += 1;
+        if (authorisedRequests === dropAuthorisedAt) {
+          req.socket.destroy();
+          return;
+        }
+      }
       if (gated && !authorised) {
+        if (redirectGateOnce && authorization === '') {
+          redirectGateOnce = false;
+          res.writeHead(302, { location: '/login', ...tag });
+          res.end();
+          return;
+        }
         res.writeHead(401, { ...challenge, ...tag });
         res.end('testers only');
         return;
       }
+      webStale += 1;
       res.writeHead(200, { 'content-type': 'text/html', ...tag });
-      res.end(page(served));
+      res.end(page(webStale <= staleLooks ? OLD : served));
     });
     await new Promise<void>((resolve) =>
       server.listen(0, '127.0.0.1', resolve),
@@ -240,66 +264,114 @@ describe('verifyDev', () => {
     served = SHA;
     gated = true;
     tagged = true;
+    staleLooks = 0;
+    dropAuthorisedAt = 0;
+    dropRobots = false;
+    redirectGateOnce = false;
     requests = 0;
-    dropAuthorised = 0;
+    authorisedRequests = 0;
+    webStale = 0;
+    healthStale = 0;
     seenAuthorization.length = 0;
   };
 
-  it('passes a gated site serving the expected commit', async () => {
+  const notServed = (polls: number) =>
+    `the expected commit ${SHA} was not served on both hosts after ${String(polls)} looks 0 ms apart`;
+
+  it('passes a gated site serving the expected commit, judging each check once', async () => {
     reset();
-    expect(await verifyDev(target(), { attempts: 1, delayMs: 0 })).toEqual([]);
+    expect(await verifyDev(target(), { polls: 3, pollMs: 0 })).toEqual([]);
     expect(
       requests,
-      'no credentials, wrong password, robots, web, health',
+      'no credentials, wrong password, web, health, robots: one look',
     ).toBe(5);
     expect(seenAuthorization).toEqual([
       '',
       basicAuthorization(`${PASSWORD}x`),
-      '',
       basicAuthorization(PASSWORD),
+      '',
       '',
     ]);
   });
 
-  it('fails at once, without retrying, when the gate is gone', async () => {
+  it('fails at once, without another look, when the gate is gone', async () => {
     reset();
     gated = false;
-    const problems = await verifyDev(target(), { attempts: 3, delayMs: 0 });
+    const problems = await verifyDev(target(), { polls: 3, pollMs: 0 });
     expect(problems).toContain(
       'web without credentials: answered 200, expected 401; the password gate is not in front of it',
     );
     expect(problems).toContain(
       'web with a wrong password: answered 200, expected 401; the password gate is not in front of it',
     );
-    expect(requests, 'the two gate probes of one attempt').toBe(2);
+    expect(requests, 'the two gate probes of the first look').toBe(2);
   });
 
-  it('retries a stale deploy, then reports both stale hosts', async () => {
+  it('waits for a stale deploy to turn current, then judges it once', async () => {
+    reset();
+    staleLooks = 2;
+    expect(await verifyDev(target(), { polls: 5, pollMs: 0 })).toEqual([]);
+    expect(requests, 'two stale looks of four probes, then one of five').toBe(
+      13,
+    );
+  });
+
+  it('fails a deploy still stale after the last look, naming each host’s commit', async () => {
     reset();
     served = OLD;
-    const problems = await verifyDev(target(), { attempts: 3, delayMs: 0 });
-    expect(problems).toEqual([
+    expect(await verifyDev(target(), { polls: 3, pollMs: 0 })).toEqual([
+      notServed(3),
       `web: serves commit ${OLD}, expected ${SHA}`,
-      `sync: /health returned ${JSON.stringify({ ok: true, commit: OLD, db: 'ok' })}, expected ${JSON.stringify({ ok: true, commit: SHA, db: 'ok' })}`,
+      `sync: /health serves commit ${OLD}, expected ${SHA}`,
     ]);
-    expect(requests, 'three attempts of five probes').toBe(15);
+    expect(requests, 'three looks of four probes').toBe(12);
+  });
+
+  it('fails a flaky gate that answers wrongly once, with no second look', async () => {
+    reset();
+    redirectGateOnce = true;
+    expect(await verifyDev(target(), { polls: 3, pollMs: 0 })).toEqual([
+      'web without credentials: answered 302, expected 401; the password gate is not in front of it',
+      'web without credentials: no Basic WWW-Authenticate challenge',
+    ]);
+    expect(requests, 'one look of five probes').toBe(5);
+  });
+
+  it('fails at once when a host that has answered drops a connection', async () => {
+    reset();
+    staleLooks = 1;
+    dropAuthorisedAt = 2;
+    const problems = await verifyDev(target(), { polls: 5, pollMs: 0 });
+    expect(problems).toEqual([
+      expect.stringMatching(new RegExp(`^web: request to ${base}/ failed: `)),
+    ]);
+    expect(requests, 'one stale look, then the look that dropped').toBe(8);
+  });
+
+  it('fails at once when robots.txt drops its connection, with no second look', async () => {
+    reset();
+    dropRobots = true;
+    const problems = await verifyDev(target(), { polls: 3, pollMs: 0 });
+    expect(problems).toEqual([
+      expect.stringMatching(
+        new RegExp(`^robots\\.txt: request to ${base}/robots\\.txt failed: `),
+      ),
+    ]);
+    expect(requests, 'one look of five probes').toBe(5);
   });
 
   it('fails when the noindex header is missing everywhere', async () => {
     reset();
     tagged = false;
-    expect(await verifyDev(target(), { attempts: 1, delayMs: 0 })).toEqual([
+    expect(await verifyDev(target(), { polls: 1, pollMs: 0 })).toEqual([
       'web: X-Robots-Tag is null, expected "noindex, nofollow, noarchive"',
       'sync: X-Robots-Tag is null, expected "noindex, nofollow, noarchive"',
     ]);
   });
 
-  it('retries through a dropped connection instead of giving up', async () => {
-    reset();
-    dropAuthorised = 1;
-    expect(await verifyDev(target(), { attempts: 3, delayMs: 0 })).toEqual([]);
-    expect(requests, 'one attempt with a dropped web probe, one clean').toBe(
-      10,
+  it('refuses a wait of no looks', async () => {
+    await expect(verifyDev(target(), { polls: 0, pollMs: 0 })).rejects.toThrow(
+      'polls must be a whole number of at least 1, got 0',
     );
   });
 
@@ -314,51 +386,45 @@ describe('verifyDev', () => {
     return `http://127.0.0.1:${port}`;
   }
 
-  it('reports an unreachable host as a problem, never a crash', async () => {
+  it('waits on a host that has never answered, then names its failure', async () => {
     reset();
     const unreachable = `${await closedOrigin()}/`;
     const problems = await verifyDev(
       { ...target(), webUrl: unreachable },
-      { attempts: 1, delayMs: 0 },
+      { polls: 2, pollMs: 0 },
     );
     expect(problems).toEqual([
-      expect.stringMatching(
-        new RegExp(
-          `^web without credentials: request to ${unreachable} failed: `,
-        ),
-      ),
-      expect.stringMatching(
-        new RegExp(
-          `^web with a wrong password: request to ${unreachable} failed: `,
-        ),
-      ),
-      expect.stringMatching(/^robots\.txt: request to .+ failed: /),
+      notServed(2),
       expect.stringMatching(
         new RegExp(`^web: request to ${unreachable} failed: `),
       ),
     ]);
+    expect(requests, 'the sync host, looked at twice').toBe(2);
   });
 
   it('never puts the password in a problem', async () => {
-    const once = { attempts: 1, delayMs: 0 };
+    const once = { polls: 1, pollMs: 0 };
     reset();
     gated = false;
     const leaking = await verifyDev(target(), once);
     reset();
     served = OLD;
+    const stale = await verifyDev(target(), once);
+    reset();
     tagged = false;
-    const broken = await verifyDev(target(), once);
+    const untagged = await verifyDev(target(), once);
     const origin = await closedOrigin();
     const unreachable = await verifyDev(
       { ...target(), webUrl: `${origin}/`, syncUrl: origin },
       once,
     );
-    // Every kind of message: a judged leak, judged answers, failed requests.
+    // Every kind of message: a judged leak, a wait, judged answers, failed requests.
     expect(leaking).toHaveLength(6);
-    expect(broken).toHaveLength(4);
-    expect(unreachable).toHaveLength(5);
-    // runtime population: the problems verifyDev reported for three broken sites.
-    for (const problem of [...leaking, ...broken, ...unreachable]) {
+    expect(stale).toHaveLength(3);
+    expect(untagged).toHaveLength(2);
+    expect(unreachable).toHaveLength(3);
+    // runtime population: the problems verifyDev reported for four broken sites.
+    for (const problem of [...leaking, ...stale, ...untagged, ...unreachable]) {
       expect(problem).not.toContain(PASSWORD);
       expect(problem).not.toContain(basicAuthorization(PASSWORD).slice(6));
     }
