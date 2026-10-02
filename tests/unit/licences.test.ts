@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 
 /**
@@ -56,5 +57,74 @@ describe('the licence set (D17)', () => {
     expect(existsSync('NOTICE'), 'Apache-2.0 section 4(d)').toBe(true);
     expect(firstLine('NOTICE')).toBe('Wordfarer');
     expect(firstLine('TRADEMARKS.md')).toBe('# Trademarks');
+  });
+});
+
+/**
+ * The former limited company is dissolved and its GitHub org was renamed to
+ * `shyden-labs` (Refs #49). GitHub redirects the old handle only until someone
+ * else claims it, so an old link can come to point at a stranger's org, and a
+ * notice naming a company that no longer exists names no holder at all.
+ *
+ * The old names are assembled from parts below so that this file, which the
+ * sweep also reads, does not trip its own guard.
+ */
+const DISSOLVED = /shyden[\s_-]*(?:ltd|limited)\b/i;
+const OLD_COMPANY = ['Shyden', 'Ltd'].join(' ');
+const OLD_HANDLE = ['Shyden', 'Ltd'].join('-');
+
+/** Every tracked text file, read from disk (a NUL byte marks binary). */
+const trackedText = () =>
+  execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+    .split('\0')
+    .filter((path) => path !== '' && existsSync(path))
+    .map((path) => ({ path, text: readFileSync(path, 'utf8') }))
+    .filter(({ text }) => !text.includes('\0'));
+
+describe('the rights holder is Shyden Labs (Refs #49)', () => {
+  it('the pattern catches every spelling of the old names', () => {
+    for (const name of [
+      OLD_COMPANY,
+      OLD_HANDLE,
+      OLD_HANDLE.toLowerCase(),
+      ['Shyden', 'Limited'].join(' '),
+    ]) {
+      expect(DISSOLVED.test(`by ${name}.`), name).toBe(true);
+    }
+    expect(DISSOLVED.test('Shyden Labs and shyden-labs')).toBe(false);
+  });
+
+  it('no tracked file names the dissolved company or its old org handle', () => {
+    const files = trackedText();
+    expect(
+      files.map(({ path }) => path),
+      'positive control: the sweep reads the whole repo',
+    ).toEqual(
+      expect.arrayContaining([
+        'NOTICE',
+        'README.md',
+        'CLAUDE.md',
+        'package.json',
+        'tests/unit/licences.test.ts',
+      ]),
+    );
+    expect(
+      files.filter(({ text }) => DISSOLVED.test(text)).map(({ path }) => path),
+    ).toEqual([]);
+  });
+
+  it('NOTICE, TRADEMARKS.md and LICENSE-CONTENT.md name Shyden Labs', () => {
+    const notice = readFileSync('NOTICE', 'utf8');
+    expect(notice).toContain('Copyright 2026 Shyden Labs (https://shyden.co.uk)');
+    expect(notice).toContain('trademarks of Shyden Labs and are not licensed');
+
+    const marks = readFileSync('TRADEMARKS.md', 'utf8');
+    expect(marks).toContain('trademarks of Shyden Labs.');
+    expect(marks).toContain('endorsement by Shyden Labs.');
+    expect(marks).toContain('contact Shyden Labs via https://shyden.co.uk');
+
+    const content = readFileSync('LICENSE-CONTENT.md', 'utf8');
+    expect(content).toContain('Original work by Shyden Labs:');
+    expect(content).toContain('**"Wordfarer, Shyden Labs"**');
   });
 });
