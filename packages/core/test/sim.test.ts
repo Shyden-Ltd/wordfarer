@@ -356,6 +356,7 @@ describe('advance (AC7)', () => {
       creditedMs: 0,
       clipped: false,
       understandingEarned: [0, 0],
+      journeysReturned: 0,
     });
   });
 

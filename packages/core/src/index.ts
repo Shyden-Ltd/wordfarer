@@ -45,6 +45,14 @@ export {
 } from './encounters';
 export { cultureCard, festivalLive, heldCards } from './cards';
 export {
+  cardPool,
+  collectJourney,
+  journeyDurationMs,
+  journeyStatus,
+  startJourney,
+  type JourneyStatus,
+} from './journeys';
+export {
   encounterRate,
   producedBetween,
   rateAt,

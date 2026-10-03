@@ -67,6 +67,22 @@ export type Rejection =
       readonly currency: UpgradeCurrency;
       readonly cost: NumTuple;
       readonly held: NumTuple;
+    }
+  | { readonly kind: 'unknownSlot'; readonly slot: number }
+  | {
+      readonly kind: 'slotLocked';
+      readonly slot: number;
+      readonly open: number;
+    }
+  | { readonly kind: 'slotBusy'; readonly slot: number }
+  | { readonly kind: 'unknownDuration'; readonly durationId: string }
+  | { readonly kind: 'tutorialUsed' }
+  | { readonly kind: 'noCards' }
+  | { readonly kind: 'slotEmpty'; readonly slot: number }
+  | {
+      readonly kind: 'notReturned';
+      readonly slot: number;
+      readonly returnsAt: number;
     };
 
 export type Result =
@@ -79,6 +95,8 @@ export interface AdvanceSummary {
   /** Whether the offline cap cut the credit short. */
   readonly clipped: boolean;
   readonly understandingEarned: NumTuple;
+  /** Journeys whose return fell in the credited time (#30). */
+  readonly journeysReturned: number;
 }
 
 export interface View {
@@ -101,7 +119,7 @@ export function understandingNow(course: CourseData, state: GameState): Num {
 }
 
 /** Move the anchor to the state's simulated time, holding the same values. */
-function reanchor(course: CourseData, state: GameState): GameState {
+export function reanchor(course: CourseData, state: GameState): GameState {
   return {
     ...state,
     anchor: {
@@ -152,6 +170,9 @@ export function advance(
       creditedMs: credited,
       clipped,
       understandingEarned: Num.toTuple(earned),
+      journeysReturned: state.journeys.filter(
+        (j) => j !== null && state.sim < j.returnsAt && j.returnsAt <= next.sim,
+      ).length,
     },
   };
 }
