@@ -8,12 +8,11 @@ import { simMs, wallMs, type WallMs } from '../src/clock';
 import type { CourseData, Encounter } from '../src/course';
 import { purchaseCost } from '../src/encounters';
 import { Num } from '../src/num';
-import type { EncounterRate } from '../src/production';
+import { understandingNow, type EncounterRate } from '../src/production';
 import {
   advance,
   buyEncounter,
   buyUpgrade,
-  understandingNow,
   view,
   type Result,
 } from '../src/sim';

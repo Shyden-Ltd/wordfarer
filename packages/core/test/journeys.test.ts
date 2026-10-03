@@ -11,14 +11,13 @@ import type {
 } from '../src/course';
 import { collectJourney, journeyStatus, startJourney } from '../src/journeys';
 import { Num } from '../src/num';
-import { rateAt, rateBreakdown } from '../src/production';
+import { rateAt, rateBreakdown, understandingNow } from '../src/production';
 import { createStreams, nextInt, type RngState } from '../src/rng';
 import { currentDestination } from '../src/route';
 import {
   advance,
   integrate,
   pickUpWord,
-  understandingNow,
   type Rejection,
   type Result,
 } from '../src/sim';

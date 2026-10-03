@@ -22,7 +22,12 @@ import {
   type WordMemory,
 } from '../src/memory';
 import { Num } from '../src/num';
-import { producedBetween, rateAt, wordMultiplier } from '../src/production';
+import {
+  producedBetween,
+  rateAt,
+  understandingNow,
+  wordMultiplier,
+} from '../src/production';
 import {
   advance,
   answerPractice,
@@ -31,7 +36,6 @@ import {
   integrate,
   listen,
   pickUpWord,
-  understandingNow,
   view,
   type Result,
 } from '../src/sim';
@@ -578,13 +582,14 @@ describe('practice (AC8)', () => {
 });
 
 describe('the view (AC6, DN23)', () => {
-  it('holds Understanding, the rate and its breakdown (#29), Insight and the queue, and nothing else', () => {
+  it('holds Understanding, the rate and its breakdown (#29), Insight, the queue and the sail preview (#31), and nothing else', () => {
     const v = view(course, played(), wallMs(START + 9 * DAY_MS));
     expect(Object.keys(v).sort()).toEqual([
       'breakdown',
       'insight',
       'queue',
       'rate',
+      'sail',
       'understanding',
     ]);
   });

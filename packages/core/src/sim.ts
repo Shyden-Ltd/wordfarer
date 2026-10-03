@@ -25,11 +25,13 @@ import {
 } from './memory';
 import { Num, type NumTuple } from './num';
 import {
-  producedBetween,
   rateBreakdown,
   totalRate,
+  understandingNow,
   type EncounterRate,
 } from './production';
+import { currentDestination, regionsReached } from './route';
+import { sailPreview, type SailPreview } from './sail';
 import { ownedCount, pickedWord, type GameState } from './state';
 import {
   encounterCostFactor,
@@ -38,7 +40,6 @@ import {
   upgradeLevel,
   type UpgradeCurrency,
 } from './upgrades';
-import { currentDestination, regionsReached } from './route';
 import { pickUpCost, pickUpPool } from './words';
 
 export type Rejection =
@@ -90,6 +91,22 @@ export type Rejection =
       readonly kind: 'notReturned';
       readonly slot: number;
       readonly returnsAt: number;
+    }
+  | { readonly kind: 'noDestination' }
+  | { readonly kind: 'sailTargetRequired' }
+  | { readonly kind: 'sailTargetInvalid'; readonly to: string }
+  | {
+      readonly kind: 'regionNotPlayable';
+      readonly destination: string;
+      readonly region: number;
+      readonly playable: number;
+    }
+  | {
+      readonly kind: 'sailGoalUnmet';
+      readonly understanding: NumTuple;
+      readonly goal: NumTuple;
+      readonly words: number;
+      readonly wordsGoal: number;
     };
 
 export type Result =
@@ -115,14 +132,8 @@ export interface View {
   readonly insight: Num;
   /** At most 10 due items; how many more are due is never shown (DN23). */
   readonly queue: readonly QueueItem[];
-}
-
-/** Understanding at the state's simulated time: the anchor's, plus production since. */
-export function understandingNow(course: CourseData, state: GameState): Num {
-  return Num.add(
-    Num.fromTuple(state.anchor.understanding),
-    producedBetween(course, state, state.anchor.sim, state.sim),
-  );
+  /** The run's goal and exactly what Set Sail would reset, keep and pay (DN3, #31). */
+  readonly sail: SailPreview;
 }
 
 /** Move the anchor to the state's simulated time, holding the same values. */
@@ -194,6 +205,7 @@ export function view(course: CourseData, state: GameState, now: WallMs): View {
     breakdown,
     insight: Num.fromTuple(at.insight),
     queue: reviewQueue(at.words, at.wall),
+    sail: sailPreview(course, at),
   };
 }
 

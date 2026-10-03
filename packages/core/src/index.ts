@@ -58,6 +58,7 @@ export {
   rateAt,
   rateBreakdown,
   totalRate,
+  understandingNow,
   wordMultiplier,
   type EncounterRate,
   type RateLine,
@@ -92,6 +93,17 @@ export {
   type Stop,
 } from './route';
 export {
+  goalMet,
+  runUnderstanding,
+  sailGoal,
+  sailPreview,
+  setSail,
+  stampGain,
+  wordsHeld,
+  type SailGoal,
+  type SailPreview,
+} from './sail';
+export {
   advance,
   answerPractice,
   answerReview,
@@ -100,7 +112,6 @@ export {
   integrate,
   listen,
   pickUpWord,
-  understandingNow,
   view,
   type AdvanceSummary,
   type Rejection,

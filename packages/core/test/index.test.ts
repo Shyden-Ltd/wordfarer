@@ -35,6 +35,14 @@ describe('the package entry point', () => {
     'currentDestination',
     'currentRegion',
     'regionsReached',
+    'setSail',
+    'sailGoal',
+    'sailPreview',
+    'goalMet',
+    'runUnderstanding',
+    'stampGain',
+    'wordsHeld',
+    'understandingNow',
   ] as const)
     it(`exports ${name}`, () => {
       expect(core[name]).toBeTypeOf('function');

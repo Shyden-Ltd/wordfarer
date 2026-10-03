@@ -4,15 +4,8 @@ import { HOUR_MS, simMs, wallMs, type WallMs } from '../src/clock';
 import type { CourseData, Encounter } from '../src/course';
 import { encounterOutput, purchaseCost } from '../src/encounters';
 import { Num, type NumTuple } from '../src/num';
-import { encounterRate } from '../src/production';
-import {
-  advance,
-  buyEncounter,
-  integrate,
-  listen,
-  understandingNow,
-  view,
-} from '../src/sim';
+import { encounterRate, understandingNow } from '../src/production';
+import { advance, buyEncounter, integrate, listen, view } from '../src/sim';
 import { createStreams } from '../src/rng';
 import { initialState, ownedCount, type GameState } from '../src/state';
 
