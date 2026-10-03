@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { JOURNEY_DURATION_IDS } from '../src/balance';
+import { heldCards } from '../src/cards';
 import { DAY_MS, HOUR_MS, simMs, wallMs, type WallMs } from '../src/clock';
-import type { CourseData, CultureCard, Encounter } from '../src/course';
+import type {
+  CourseData,
+  CultureCard,
+  Encounter,
+  LexiconItem,
+} from '../src/course';
 import { collectJourney, journeyStatus, startJourney } from '../src/journeys';
 import { Num } from '../src/num';
 import { rateAt, rateBreakdown } from '../src/production';
@@ -10,11 +16,13 @@ import { createStreams, nextInt, type RngState } from '../src/rng';
 import {
   advance,
   integrate,
+  pickUpWord,
   understandingNow,
   type Rejection,
   type Result,
 } from '../src/sim';
 import { initialState, type GameState } from '../src/state';
+import { pickUpPool } from '../src/words';
 
 /**
  * Journeys (#30 AC1 to AC3, AC5 to AC7): slots, durations, the return, the
@@ -444,5 +452,71 @@ describe('a repeat card (AC7)', () => {
     const second = ok(collectJourney(solo, first, 0));
     expect(second.cards).toEqual(['solo']);
     expect(Num.toNumber(Num.fromTuple(second.insight))).toBe(2);
+  });
+});
+
+const word = (id: string, cefr: LexiconItem['cefr']): LexiconItem => ({
+  id,
+  tags: ['food'],
+  cefr,
+});
+
+/** A destination of two words and one card whose pack holds two more. */
+const packCourse: CourseData = {
+  ...solo,
+  regions: [
+    {
+      id: 'r0',
+      destinations: [
+        { id: 'd0', lexicon: [word('d-b1', 'B1'), word('d-a1', 'A1')] },
+      ],
+      encounters: [tea],
+      cardSets: [{ id: 'eats', bonus: 0.25 }],
+      cultureCards: [
+        card('gado', 'eats', {
+          phrasePack: [word('p-a2', 'A2'), word('p-a1', 'A1')],
+        }),
+      ],
+      grammarNodes: [],
+    },
+  ],
+};
+
+const poolIds = (state: GameState): string[] =>
+  pickUpPool(packCourse, heldCards(packCourse, state)).map((w) => w.id);
+
+describe('phrase packs (AC4)', () => {
+  it("adds a collected card's pack to the pick-up pool, in curriculum order", () => {
+    expect(poolIds(game())).toEqual(['d-a1', 'd-b1']);
+    expect(poolIds(roundTrip(packCourse, game()))).toEqual([
+      'd-a1',
+      'p-a1',
+      'p-a2',
+      'd-b1',
+    ]);
+  });
+
+  it('adds nothing while the card is still away', () => {
+    expect(poolIds(ok(startJourney(packCourse, game(), 0, '2h')))).toEqual([
+      'd-a1',
+      'd-b1',
+    ]);
+  });
+
+  it('lets a pack word be picked up, and it pays like any word', () => {
+    let s: GameState = {
+      ...roundTrip(packCourse, game()),
+      anchor: {
+        sim: simMs(2 * HOUR_MS),
+        understanding: Num.toTuple(Num.from(1e6)),
+      },
+    };
+    // one scenario: three pick-ups walk the pool to its first pack words.
+    for (let i = 0; i < 3; i++) s = ok(pickUpWord(packCourse, s));
+    expect(Object.keys(s.words).sort()).toEqual(['d-a1', 'p-a1', 'p-a2']);
+    const words = rateBreakdown(packCourse, s, s.sim)[0]?.lines.find(
+      (l) => l.name === 'words',
+    );
+    expect(Num.toNumber(words?.factor ?? Num.from(0))).toBeGreaterThan(1);
   });
 });

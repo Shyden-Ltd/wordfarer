@@ -83,7 +83,7 @@ export {
   type QueueItem,
   type WordMemory,
 } from './memory';
-export { pickUpCost } from './words';
+export { pickUpCost, pickUpPool } from './words';
 export {
   advance,
   answerPractice,
