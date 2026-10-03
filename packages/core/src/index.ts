@@ -57,6 +57,7 @@ export {
   producedBetween,
   rateAt,
   rateBreakdown,
+  rateGain,
   totalRate,
   understandingNow,
   wordMultiplier,
@@ -65,6 +66,7 @@ export {
 } from './production';
 export {
   encounterCostFactor,
+  encounterPrice,
   findUpgrade,
   globalMultiplier,
   journeyDurationFactor,
@@ -85,7 +87,11 @@ export {
   type WordMemory,
 } from './memory';
 export { findGrammarNode, grammarNodeCost, ownedGrammarNodes } from './grammar';
-export { automationOpensAt, automationUnlocked } from './automation';
+export {
+  automationOpensAt,
+  automationUnlocked,
+  bestPayback,
+} from './automation';
 export { pickUpCost, pickUpPool } from './words';
 export {
   currentDestination,

@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { simMs, wallMs, type WallMs } from '../src/clock';
-import type { CourseData, Destination, Region } from '../src/course';
-import { automationOpensAt, automationUnlocked } from '../src/automation';
-import { newWordMemory, type WordMemory } from '../src/memory';
+import type { CourseData, Destination, Encounter, Region } from '../src/course';
+import {
+  automationOpensAt,
+  automationUnlocked,
+  bestPayback,
+} from '../src/automation';
+import { newWordMemory, review, type WordMemory } from '../src/memory';
 import { Num, type NumTuple } from '../src/num';
-import { understandingNow } from '../src/production';
+import { rateBreakdown, rateGain, understandingNow } from '../src/production';
 import { setSail } from '../src/sail';
 import { setAutomation, type Rejection, type Result } from '../src/sim';
 import { initialState, type GameState } from '../src/state';
+import { encounterPrice } from '../src/upgrades';
 
 /**
  * Pemandu automation (#33): the unlock and the setting (AC1).
@@ -271,5 +276,132 @@ describe('setAutomation (AC1)', () => {
     const s = at(4, { owned: { tea0: 3 }, held: 7, simMs: 90_000 });
     const on = ok(setAutomation(course, s, true, 10_000));
     expect({ ...on, anchor: s.anchor, automation: s.automation }).toEqual(s);
+  });
+});
+
+/**
+ * The choice (AC2): with nothing owned, no words and no stamps, an
+ * Encounter's first unit adds exactly its p0, so cost / Δrate is c0 / p0:
+ * tea 10, inn 5, market 6.67, palace 50, and region 2's ferry 0.1.
+ */
+const TEA: Encounter = { id: 'tea', tags: ['food'], c0: 10, p0: 1 };
+
+function shopRegion(r: number): Region {
+  const encounters =
+    r === 0
+      ? [
+          TEA,
+          { id: 'inn', tags: ['travel'], c0: 50, p0: 10 },
+          { id: 'market', tags: ['food'], c0: 100, p0: 15 },
+          { id: 'palace', tags: ['travel'], c0: 10_000, p0: 200 },
+        ]
+      : [{ id: `ferry${String(r)}`, tags: ['travel'], c0: 10, p0: 100 }];
+  return { ...region(r), encounters };
+}
+
+const shop: CourseData = {
+  id: 'shop-course',
+  tags: ['food', 'travel'],
+  regions: [shopRegion(0), shopRegion(1), shopRegion(2)],
+};
+
+/** Two Encounters alike in all but id: 'Zed' sorts before 'apple' by code unit. */
+const twins: CourseData = {
+  ...shop,
+  regions: [
+    {
+      ...region(0),
+      encounters: [
+        { id: 'apple', tags: ['food'], c0: 10, p0: 1 },
+        { id: 'Zed', tags: ['food'], c0: 10, p0: 1 },
+      ],
+    },
+  ],
+};
+
+describe('rateGain (AC2)', () => {
+  // Reviewed two days before the game, so each word's bonus depends on the
+  // hour bucket the gain is taken in.
+  const reviewedAt = wallMs(START - 2 * 86_400_000);
+  const words = Object.fromEntries(
+    ['r0-d0-w0', 'r0-d0-w1'].map((id) => [
+      id,
+      review(newWordMemory(reviewedAt), reviewedAt, true),
+    ]),
+  );
+  const s = at(4, {
+    owned: { tea: 9, inn: 3, ferry1: 1 },
+    upgrades: { 'phrasebook:food': 1 },
+    words,
+    simMs: 5 * 3_600_000 + 17,
+  });
+  const reachable = shop.regions.flatMap((r) => r.encounters);
+
+  it.each(reachable.map((e) => [e.id, e] as const))(
+    '%s: its rate with one more, less its rate now, bit for bit',
+    (_id, encounter) => {
+      const gain = rateGain(shop, s, s.sim)(encounter);
+      const plus = {
+        ...s,
+        owned: { ...s.owned, [encounter.id]: (s.owned[encounter.id] ?? 0) + 1 },
+      };
+      const rateOf = (state: GameState) =>
+        rateBreakdown(shop, state, s.sim).find((e) => e.id === encounter.id)
+          ?.rate ?? Num.from(0);
+      expect(gain).toEqual(Num.sub(rateOf(plus), rateOf(s)));
+    },
+  );
+
+  it('the 10th tea doubles every tea, so it gains 11 of them', () => {
+    const plain = at(0, { owned: { tea: 9 } });
+    expect(rateGain(shop, plain, simMs(0))(TEA)).toEqual(Num.from(11));
+  });
+});
+
+describe('bestPayback (AC2)', () => {
+  it.each([
+    ['nothing, when no unit is affordable', 0, 9, {}, {}, undefined],
+    ['tea, the only one affordable', 0, 10, {}, {}, 'tea'],
+    ['inn at 5 over tea at 10, not the cheapest', 0, 50, {}, {}, 'inn'],
+    ['inn at 5 over palace, which gains the most', 0, 1e5, {}, {}, 'inn'],
+    ['inn, since ferry is in region 2', 3, 1e5, {}, {}, 'inn'],
+    ['ferry at 0.1 once region 2 is reached', 4, 1e5, {}, {}, 'ferry1'],
+    ['tea at 3.2 when its 10th unit doubles it', 0, 1e5, { tea: 9 }, {}, 'tea'],
+    ['inn over tea at 30.6 one unit earlier', 0, 1e5, { tea: 8 }, {}, 'inn'],
+    [
+      'market at 3.33 once a Phrasebook doubles food',
+      0,
+      1e5,
+      {},
+      { 'phrasebook:food': 1 },
+      'market',
+    ],
+    [
+      'tea at 9.5 with one level of stamp discount',
+      0,
+      9.6,
+      {},
+      { encounterDiscount: 1 },
+      'tea',
+    ],
+    ['nothing at 9.6 without it', 0, 9.6, {}, {}, undefined],
+  ] as const)('chooses %s', (_label, reached, held, owned, upgrades, want) => {
+    expect(bestPayback(shop, at(reached, { held, owned, upgrades }))).toBe(
+      want,
+    );
+  });
+
+  it('buys a unit whose price is exactly the Understanding held', () => {
+    const s = at(0);
+    const price = encounterPrice(s, TEA, 1);
+    const held = {
+      ...s,
+      anchor: { sim: s.sim, understanding: Num.toTuple(price) },
+    };
+    expect(bestPayback(shop, held)).toBe('tea');
+  });
+
+  it('breaks a tie by id in code-unit order', () => {
+    expect(bestPayback(twins, at(0, { held: 100 }))).toBe('Zed');
   });
 });

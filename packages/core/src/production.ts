@@ -181,6 +181,21 @@ function linesFor(
   return lines;
 }
 
+function sharedAt(course: CourseData, state: GameState, t: SimMs): Shared {
+  const held = heldCards(course, state);
+  return {
+    held,
+    wall: t + state.wall - state.sim,
+    sets: setFactor(course, held),
+    stamps: Num.from(globalMultiplier(state)),
+  };
+}
+
+/** A rate as the product of its lines, multiplied in order. */
+function product(lines: readonly RateLine[]): Num {
+  return lines.reduce((r, l) => Num.mul(r, l.factor), Num.from(1));
+}
+
 /**
  * Each owned Encounter's rate at simulated time `t`, in course order, with
  * the named lines it is the product of (DN6). The words' means are the
@@ -192,13 +207,7 @@ export function rateBreakdown(
   t: SimMs,
 ): readonly EncounterRate[] {
   let bonuses: readonly TaggedBonus[] | undefined;
-  const held = heldCards(course, state);
-  const shared: Shared = {
-    held,
-    wall: t + state.wall - state.sim,
-    sets: setFactor(course, held),
-    stamps: Num.from(globalMultiplier(state)),
-  };
+  const shared = sharedAt(course, state, t);
   const rates: EncounterRate[] = [];
   for (const region of course.regions) {
     for (const encounter of region.encounters) {
@@ -206,14 +215,34 @@ export function rateBreakdown(
       if (owned === 0) continue;
       bonuses ??= bucketBonuses(course, state, t);
       const lines = linesFor(state, encounter, owned, bonuses, shared);
-      rates.push({
-        id: encounter.id,
-        lines,
-        rate: lines.reduce((r, l) => Num.mul(r, l.factor), Num.from(1)),
-      });
+      rates.push({ id: encounter.id, lines, rate: product(lines) });
     }
   }
   return rates;
+}
+
+/**
+ * How much one more of an Encounter would raise the rate at simulated time
+ * `t`: its rate with one more, less its rate now, every multiplier included,
+ * so a unit that reaches a milestone gains the doubling of all its kind
+ * (#33). Only its own `encounters` and `milestones` lines move, so the
+ * bucket's word bonuses and the shared lines are worked out once.
+ */
+export function rateGain(
+  course: CourseData,
+  state: GameState,
+  t: SimMs,
+): (encounter: Encounter) => Num {
+  const bonuses = bucketBonuses(course, state, t);
+  const shared = sharedAt(course, state, t);
+  return (encounter) => {
+    const owned = ownedCount(state, encounter.id);
+    const now = product(linesFor(state, encounter, owned, bonuses, shared));
+    const more = product(
+      linesFor(state, encounter, owned + 1, bonuses, shared),
+    );
+    return Num.sub(more, now);
+  };
 }
 
 /** The total of a breakdown's rates, added in its order. */

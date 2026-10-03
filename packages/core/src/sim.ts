@@ -15,7 +15,6 @@ import { BALANCE } from './balance';
 import { heldCards } from './cards';
 import { simMs, wallMs, type WallMs } from './clock';
 import type { CourseData, Encounter } from './course';
-import { purchaseCost } from './encounters';
 import { findGrammarNode, grammarNodeCost, ownedGrammarNodes } from './grammar';
 import {
   insightFor,
@@ -37,7 +36,7 @@ import { sailPreview, type SailPreview } from './sail';
 import { ownedCount, pickedWord, type GameState } from './state';
 import { unfold, type Unfold } from './unfold';
 import {
-  encounterCostFactor,
+  encounterPrice,
   findUpgrade,
   offlineCapMs,
   pemanduIntervalsMs,
@@ -283,10 +282,7 @@ export function buyEncounter(
     return { ok: false, rejection: { kind: 'invalidCount', count } };
   }
   const owned = ownedCount(state, id);
-  const cost = Num.mul(
-    purchaseCost(encounter, owned, count),
-    Num.from(encounterCostFactor(state)),
-  );
+  const cost = encounterPrice(state, encounter, count);
   const anchored = reanchor(course, state);
   const understanding = Num.fromTuple(anchored.anchor.understanding);
   if (Num.cmp(understanding, cost) < 0) {

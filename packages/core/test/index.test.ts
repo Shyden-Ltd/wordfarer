@@ -51,6 +51,9 @@ describe('the package entry point', () => {
     'setAutomation',
     'automationOpensAt',
     'automationUnlocked',
+    'bestPayback',
+    'rateGain',
+    'encounterPrice',
   ] as const)
     it(`exports ${name}`, () => {
       expect(core[name]).toBeTypeOf('function');
