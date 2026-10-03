@@ -5,7 +5,9 @@
  * output is multiplied by M_words = 1 + the sum of b_w over the words sharing
  * one of its tags (parent §3.3), by x2 for each owned Phrasebook of one of
  * its tags, by its held culture cards and complete sets (design §5, #30),
- * and by the global stamp bonus (design §5, #29). Each multiplier
+ * and by the global stamp bonus (design §5, #29). A word whose root an owned
+ * grammar node attaches to has its bonus multiplied by that root's factor;
+ * the `grammar` line is how much that raises M_words (#32). Each multiplier
  * is a named line of the rate breakdown (DN6), and the rate is the product
  * of its lines, so what is shown is what is paid. A word's bonus in a bucket uses its
  * exact mean retrievability over the bucket, on the wall clock, from the
@@ -21,6 +23,7 @@ import { DAY_MS, HOUR_MS, bucketStart, simMs, type SimMs } from './clock';
 import { cardFactor, heldCards, nextFestivalEdge, setFactor } from './cards';
 import type { CourseData, CultureCard, Encounter } from './course';
 import { encounterOutput, milestoneFactor } from './encounters';
+import { rootFactors } from './grammar';
 import { meanRetrievability } from './memory';
 import { Num } from './num';
 import { ownedCount, type GameState } from './state';
@@ -32,7 +35,10 @@ const PHRASEBOOK = Num.from(BALANCE.insightUpgrades.phrasebookMultiplier);
 
 /** One named multiplier of an Encounter's rate (DN6). */
 export interface RateLine {
-  /** `encounters`, `milestones`, `words`, `phrasebook:<tag>`, `cards`, `sets` or `stamps`. */
+  /**
+   * `encounters`, `milestones`, `words`, `grammar`, `phrasebook:<tag>`,
+   * `cards`, `sets` or `stamps`.
+   */
   readonly name: string;
   readonly factor: Num;
 }
@@ -47,6 +53,8 @@ export interface EncounterRate {
 interface TaggedBonus {
   readonly tags: readonly string[];
   readonly bonus: number;
+  /** The word's grammar factor: its root's, or 1 (#32). */
+  readonly grammar: number;
 }
 
 /** Understanding per second from every owned Encounter, before any multiplier. */
@@ -74,6 +82,7 @@ function bucketBonuses(
   const from = Math.max(start, state.memorySince);
   const spanDays = (start + HOUR_MS - from) / DAY_MS;
   const skew = state.wall - state.sim;
+  const factors = rootFactors(course, state);
   return Object.entries(state.words)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([id, word]) => {
@@ -86,9 +95,11 @@ function bucketBonuses(
               (from + skew - lastReview) / DAY_MS,
               spanDays,
             );
+      const { tags, root } = lexiconItem(course, id);
       return {
-        tags: lexiconItem(course, id).tags,
+        tags,
         bonus: wordBonus(word.rank, meanR),
+        grammar: root === undefined ? 1 : (factors.get(root) ?? 1),
       };
     });
 }
@@ -104,7 +115,26 @@ function multiplier(
   return m;
 }
 
-/** M_words for `encounter` in the bucket holding `t`. */
+/**
+ * How much grammar raises `encounter`'s M_words: 1 + the multiplied bonuses
+ * over 1 + the bonuses, or undefined when no word on its tags has a factor
+ * (#32). The words line times this is what is paid.
+ */
+function grammarRatio(
+  bonuses: readonly TaggedBonus[],
+  encounter: Encounter,
+): number | undefined {
+  let multiplied = 1;
+  let covered = false;
+  for (const { tags, bonus, grammar } of bonuses) {
+    if (!sharesTag(tags, encounter.tags)) continue;
+    multiplied += bonus * grammar;
+    if (grammar !== 1) covered = true;
+  }
+  return covered ? multiplied / multiplier(bonuses, encounter) : undefined;
+}
+
+/** M_words for `encounter` in the bucket holding `t`, before grammar. */
 export function wordMultiplier(
   course: CourseData,
   state: GameState,
@@ -134,6 +164,9 @@ function linesFor(
     { name: 'milestones', factor: milestoneFactor(owned) },
     { name: 'words', factor: Num.from(multiplier(bonuses, encounter)) },
   ];
+  const grammar = grammarRatio(bonuses, encounter);
+  if (grammar !== undefined)
+    lines.push({ name: 'grammar', factor: Num.from(grammar) });
   for (const tag of encounter.tags) {
     const id = phrasebookId(tag);
     if (upgradeLevel(state, id) > 0)

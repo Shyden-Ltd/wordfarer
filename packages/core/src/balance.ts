@@ -123,6 +123,11 @@ export interface Balance {
   readonly grammar: {
     /** A node multiplies each word on its roots by (1 + rootGain) (design §5). */
     readonly rootGain: number;
+    /** The next node costs costC0 x costGrowth^n Insight, n nodes owned (#32). */
+    readonly costC0: number;
+    readonly costGrowth: number;
+    /** Grammar opens once this many regions are reached (parent §4.4, #32). */
+    readonly opensAtRegion: number;
   };
   readonly automation: {
     /** Pemandu intervals: the starting one, then each upgrade (design §5). */
@@ -237,7 +242,7 @@ export const BALANCE: Balance = deepFreeze({
     capStepMs: 24 * HOUR_MS,
     maxCapMs: 72 * HOUR_MS,
   },
-  grammar: { rootGain: 0.5 },
+  grammar: { rootGain: 0.5, costC0: 50, costGrowth: 1.5, opensAtRegion: 2 },
   automation: { intervalsMs: [10_000, 5_000, 2_000, 1_000] },
   // Starting values with nothing measured yet; the pacing bots tune them (#35).
   sail: {

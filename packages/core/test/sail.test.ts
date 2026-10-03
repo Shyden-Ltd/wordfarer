@@ -69,7 +69,8 @@ function region(r: number): Region {
     encounters: [encounter(r)],
     cardSets: [{ id: `s${String(r)}`, bonus: 0.1 }],
     cultureCards: [card(r)],
-    grammarNodes: [],
+    // A node on a root no word has: owning it changes no rate (#32).
+    grammarNodes: [{ id: `g${String(r)}`, roots: ['none'], derived: [] }],
   };
 }
 
@@ -276,6 +277,7 @@ describe('the preview (AC2, DN3)', () => {
     stampsEarned: 2,
     cards: ['c0'],
     upgrades: { startingUnderstanding: 2, journeySlot2: 1 },
+    grammar: ['g0', 'g1'],
   };
   // Computed per test, so a failing sail fails each test, not the file.
   const preview = () => view(course, before, before.wall).sail;
@@ -316,14 +318,16 @@ describe('the preview (AC2, DN3)', () => {
     );
   });
 
-  it('keeps exactly the words, cards, upgrades and stamps the state keeps', () => {
+  it('keeps exactly the words, cards, upgrades, grammar and stamps the state keeps', () => {
     expect(preview().keeps).toEqual({
       words: Object.keys(after().words).length,
       cards: after().cards.length,
       upgradeLevels: 3,
+      grammarNodes: after().grammar.length,
       stamps: after().stamps,
     });
     expect(preview().keeps.stamps).toBe(8);
+    expect(preview().keeps.grammarNodes).toBe(2);
   });
 
   it('is unavailable before the goal is met, and still shows the goal', () => {
@@ -372,6 +376,7 @@ describe('a sail resets only Encounters and Understanding (AC3, DN3)', () => {
     upgrades: { journeySlot2: 1, startingUnderstanding: 2 },
     cards: ['c0'],
     tutorialJourneyUsed: true,
+    grammar: ['g0'],
   };
   const out = ok(startJourney(course, before, 0, '2h'));
   // Computed per test, so a failing sail fails each test, not the file.
@@ -402,6 +407,10 @@ describe('a sail resets only Encounters and Understanding (AC3, DN3)', () => {
   it('keeps the words, their ranks and their FSRS memory', () => {
     expect(after().words).toEqual(out.words);
     expect(Object.keys(after().words)).toHaveLength(goalWords(2));
+  });
+
+  it('keeps the grammar nodes (#32 AC4)', () => {
+    expect(after().grammar).toEqual(['g0']);
   });
 
   it('keeps the cards, upgrades and Insight', () => {

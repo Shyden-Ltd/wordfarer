@@ -52,10 +52,10 @@ describe('BALANCE', () => {
         );
       }
     });
-    // Measured 90 with #31's Set Sail table (84 with #30's journey tables,
-    // 74 at b2a6f3f, #82); raise it with BALANCE, lower it only when
-    // BALANCE shrinks.
-    expect(leaves.length).toBeGreaterThan(89);
+    // Measured 93 with #32's grammar costs (90 with #31's Set Sail table,
+    // 84 with #30's journey tables, 74 at b2a6f3f, #82); raise it with
+    // BALANCE, lower it only when BALANCE shrinks.
+    expect(leaves.length).toBeGreaterThan(92);
   });
 
   it.each<[string, (b: Balance) => unknown, unknown]>([
@@ -158,7 +158,11 @@ describe('BALANCE', () => {
       (b) => b.offline,
       { capMs: 86_400_000, capStepMs: 86_400_000, maxCapMs: 259_200_000 },
     ],
-    ['design §5: grammar g = 0.5', (b) => b.grammar.rootGain, 0.5],
+    [
+      'design §5: grammar g = 0.5; a node costs 50 x 1.5^n Insight from region 2 (#32)',
+      (b) => b.grammar,
+      { rootGain: 0.5, costC0: 50, costGrowth: 1.5, opensAtRegion: 2 },
+    ],
     [
       'design §5: Pemandu 10 s, then 5 s, 2 s, 1 s',
       (b) => b.automation.intervalsMs,

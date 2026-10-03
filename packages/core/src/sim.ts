@@ -15,6 +15,7 @@ import { heldCards } from './cards';
 import { simMs, wallMs, type WallMs } from './clock';
 import type { CourseData, Encounter } from './course';
 import { purchaseCost } from './encounters';
+import { findGrammarNode, grammarNodeCost, ownedGrammarNodes } from './grammar';
 import {
   insightFor,
   isDue,
@@ -108,6 +109,20 @@ export type Rejection =
       readonly goal: NumTuple;
       readonly words: number;
       readonly wordsGoal: number;
+    }
+  | { readonly kind: 'unknownGrammarNode'; readonly id: string }
+  | { readonly kind: 'grammarNodeOwned'; readonly id: string }
+  | {
+      readonly kind: 'grammarNodeLocked';
+      readonly id: string;
+      readonly region: number;
+      readonly regionsReached: number;
+    }
+  | {
+      readonly kind: 'grammarNodeUnaffordable';
+      readonly id: string;
+      readonly cost: NumTuple;
+      readonly held: NumTuple;
     };
 
 export type Result =
@@ -304,8 +319,9 @@ function spent(state: GameState, cost: Num): NumTuple {
 
 /**
  * Pick up the next word of the pick-up pool in curriculum order, paying for
- * it from Understanding (parent §3.3): the current destination's lexicon and
- * the held cards' phrase packs (#30). The cost counts towards this run's
+ * it from Understanding (parent §3.3): the current destination's lexicon, the
+ * held cards' phrase packs (#30) and the owned grammar nodes' derived words
+ * (#32). The cost counts towards this run's
  * spend. The first word ever picked up is the tutorial word: it falls due
  * `tutorialDueMs` later, when Review unfolds (parent §4.1); every other word
  * is due at once.
@@ -314,6 +330,7 @@ export function pickUpWord(course: CourseData, state: GameState): Result {
   const pool = pickUpPool(
     currentDestination(course, state),
     heldCards(course, state),
+    ownedGrammarNodes(course, state),
   );
   const next = pool.find((item) => pickedWord(state, item.id) === undefined);
   if (next === undefined) {
@@ -460,5 +477,60 @@ export function buyUpgrade(
             upgrades,
           }
         : { ...anchored, stamps: anchored.stamps - cost, upgrades },
+  };
+}
+
+/**
+ * Buy grammar node `id` at the state's simulated time, paid in Insight.
+ * Refused, in this order, when the course has no such node, it is already
+ * owned, grammar has not opened or the node's region is not reached, or the
+ * player cannot pay. A node changes rates, so production up to the purchase
+ * is banked first.
+ */
+export function buyGrammarNode(
+  course: CourseData,
+  state: GameState,
+  id: string,
+): Result {
+  const found = findGrammarNode(course, id);
+  if (found === undefined) {
+    return { ok: false, rejection: { kind: 'unknownGrammarNode', id } };
+  }
+  if (state.grammar.includes(id)) {
+    return { ok: false, rejection: { kind: 'grammarNodeOwned', id } };
+  }
+  const reached = regionsReached(course, state);
+  if (reached < BALANCE.grammar.opensAtRegion || found.region >= reached) {
+    return {
+      ok: false,
+      rejection: {
+        kind: 'grammarNodeLocked',
+        id,
+        region: found.region,
+        regionsReached: reached,
+      },
+    };
+  }
+  const cost = grammarNodeCost(state.grammar.length);
+  const held = Num.fromTuple(state.insight);
+  if (Num.cmp(held, cost) < 0) {
+    return {
+      ok: false,
+      rejection: {
+        kind: 'grammarNodeUnaffordable',
+        id,
+        cost: Num.toTuple(cost),
+        held: Num.toTuple(held),
+      },
+    };
+  }
+  const anchored = reanchor(course, state);
+  return {
+    ok: true,
+    state: {
+      ...anchored,
+      insight: Num.toTuple(Num.sub(held, cost)),
+      grammar: [...anchored.grammar, id],
+    },
   };
 }

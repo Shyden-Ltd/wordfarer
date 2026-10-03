@@ -4,7 +4,8 @@
  * Spending Understanding picks up the next item of the pick-up pool in
  * curriculum order: CEFR first, then the pool's own order. The pool is the
  * current destination's lexicon, then the phrase packs of the held culture
- * cards in course order (design §5, #30).
+ * cards in course order (design §5, #30), then the derived words of the owned
+ * grammar nodes in course order (#32).
  * Each word boosts every Encounter sharing one of its tags by
  * b_w = rankBonus[rank] x (floorShare + (1 - floorShare) x R), so it never
  * falls below floorShare x rankBonus however long it goes unreviewed (DN16).
@@ -15,6 +16,7 @@ import type {
   CourseData,
   CultureCard,
   Destination,
+  GrammarNode,
   LexiconItem,
 } from './course';
 import { Num } from './num';
@@ -26,17 +28,21 @@ const PICK_UP_GROWTH = Num.from(BALANCE.words.pickUpGrowth);
 /**
  * The pick-up pool in curriculum order: `destination`'s lexicon (the current
  * one, from `route.ts`), then the phrase packs of `held` (the held cards, in
- * course order), sorted by CEFR.
+ * course order), then the derived words of `nodes` (the owned grammar nodes,
+ * in course order), sorted by CEFR.
  */
 export function pickUpPool(
   destination: Destination | undefined,
   held: readonly CultureCard[],
+  nodes: readonly GrammarNode[],
 ): readonly LexiconItem[] {
   const lexicon = destination?.lexicon ?? [];
   // Array.prototype.sort is stable, so equal CEFR keeps the pool's order.
-  return [...lexicon, ...held.flatMap((card) => card.phrasePack)].sort(
-    (a, b) => CEFR_ORDER[a.cefr] - CEFR_ORDER[b.cefr],
-  );
+  return [
+    ...lexicon,
+    ...held.flatMap((card) => card.phrasePack),
+    ...nodes.flatMap((node) => node.derived),
+  ].sort((a, b) => CEFR_ORDER[a.cefr] - CEFR_ORDER[b.cefr]);
 }
 
 /** The cost of the next pick-up when `picked` items of the destination are held. */
@@ -62,7 +68,10 @@ export function sharesTag(a: readonly string[], b: readonly string[]): boolean {
 
 const itemIndexes = new WeakMap<CourseData, ReadonlyMap<string, LexiconItem>>();
 
-/** The lexicon item `id` anywhere in the course: a destination's, or a card's phrase pack's. */
+/**
+ * The lexicon item `id` anywhere in the course: a destination's, a card's
+ * phrase pack's, or a grammar node's derived word.
+ */
 export function lexiconItem(course: CourseData, id: string): LexiconItem {
   let index = itemIndexes.get(course);
   if (index === undefined) {
@@ -73,6 +82,9 @@ export function lexiconItem(course: CourseData, id: string): LexiconItem {
       }
       for (const card of region.cultureCards) {
         for (const item of card.phrasePack) built.set(item.id, item);
+      }
+      for (const node of region.grammarNodes) {
+        for (const item of node.derived) built.set(item.id, item);
       }
     }
     itemIndexes.set(course, built);

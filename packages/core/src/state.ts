@@ -85,11 +85,13 @@ export interface GameState {
   readonly runSpent: NumTuple;
   /** How many of the course's regions, from the first, may be sailed to. */
   readonly playableRegions: number;
+  /** Grammar nodes owned, by id, in the order they were bought (#32). */
+  readonly grammar: readonly string[];
 }
 
 /**
  * A new game at wall time `wall` whose draws come from `seed`: nothing owned,
- * no currency, no words, no upgrades, every Journey slot empty, at the first
+ * no currency, no words, no upgrades or grammar, every Journey slot empty, at the first
  * destination, able to sail through the first `playableRegions` regions.
  */
 export function initialState(
@@ -124,6 +126,7 @@ export function initialState(
     replays: {},
     runSpent: Num.toTuple(Num.from(0)),
     playableRegions,
+    grammar: [],
   };
 }
 
