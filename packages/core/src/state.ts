@@ -25,6 +25,13 @@ export interface Journey {
   readonly cardId: string;
 }
 
+/** Pemandu's setting (design §5, #33): off or on, at the interval chosen. */
+export interface Automation {
+  readonly enabled: boolean;
+  /** The tick interval, one of those owned; kept while Pemandu is off. */
+  readonly intervalMs: number;
+}
+
 export interface Anchor {
   /** The simulated time the stored quantities hold at. */
   readonly sim: SimMs;
@@ -87,12 +94,14 @@ export interface GameState {
   readonly playableRegions: number;
   /** Grammar nodes owned, by id, in the order they were bought (#32). */
   readonly grammar: readonly string[];
+  /** Pemandu's setting, which a sail keeps (#33). */
+  readonly automation: Automation;
 }
 
 /**
  * A new game at wall time `wall` whose draws come from `seed`: nothing owned,
- * no currency, no words, no upgrades or grammar, every Journey slot empty, at the first
- * destination, able to sail through the first `playableRegions` regions.
+ * no currency, no words, no upgrades or grammar, every Journey slot empty, Pemandu
+ * off at its starting interval, at the first destination, able to sail through the first `playableRegions` regions.
  */
 export function initialState(
   wall: WallMs,
@@ -127,6 +136,10 @@ export function initialState(
     runSpent: Num.toTuple(Num.from(0)),
     playableRegions,
     grammar: [],
+    automation: {
+      enabled: false,
+      intervalMs: BALANCE.automation.intervalsMs[0],
+    },
   };
 }
 

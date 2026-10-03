@@ -193,7 +193,7 @@ describe('the goal (AC1)', () => {
       ...at(0, { held: goalU(0) - 3_600 }),
       owned: { e0: 1 },
     };
-    const later = integrate(owning, HOUR_MS);
+    const later = integrate(course, owning, HOUR_MS);
     expect(goalMet(course, owning)).toBe(false);
     expect(n(runUnderstanding(course, later))).toBeGreaterThanOrEqual(goalU(0));
     expect(goalMet(course, later)).toBe(true);
@@ -436,7 +436,7 @@ describe('a sail resets only Encounters and Understanding (AC3, DN3)', () => {
     const sailed = ok(setSail(course, away));
     expect(sailed.destination).toBe(4);
     const collected = ok(
-      collectJourney(course, integrate(sailed, 2 * HOUR_MS), 0),
+      collectJourney(course, integrate(course, sailed, 2 * HOUR_MS), 0),
     );
     expect(collected.cards).toEqual(['c0']);
   });

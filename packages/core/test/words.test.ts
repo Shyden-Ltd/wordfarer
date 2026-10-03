@@ -310,7 +310,7 @@ describe('picking up a word (AC1)', () => {
   });
 
   it('pays from Understanding produced since the anchor, and re-anchors', () => {
-    const s = integrate(rich(0, { tea: 1 }), 25_000);
+    const s = integrate(course, rich(0, { tea: 1 }), 25_000);
     expect(held(s)).toBe(25);
     const next = ok(pickUpWord(course, s));
     expect(next.anchor.sim).toBe(25_000);
@@ -361,7 +361,7 @@ describe('the word bonus (AC2)', () => {
   it('over a whole hour with no event, production equals the continuous model to 1e-12', () => {
     const s = played();
     const h = bucketStart(simMs(s.sim + HOUR_MS));
-    const later = integrate(s, h - s.sim);
+    const later = integrate(course, s, h - s.sim);
     const want = continuous(later, h, h + HOUR_MS);
     const got = Num.toNumber(
       producedBetween(course, later, h, simMs(h + HOUR_MS)),
@@ -383,7 +383,7 @@ describe('the word bonus (AC2)', () => {
     // for all three (no bucket split) is off by R's decay across them.
     const s = played();
     const h = bucketStart(simMs(s.sim + HOUR_MS));
-    const later = integrate(s, h - s.sim);
+    const later = integrate(course, s, h - s.sim);
     const got = Num.toNumber(
       producedBetween(course, later, h, simMs(h + 3 * HOUR_MS)),
     );
@@ -394,7 +394,7 @@ describe('the word bonus (AC2)', () => {
 
   it('after a review mid-hour, production to the hour’s end equals the continuous model', () => {
     let s = played();
-    s = integrate(s, HOUR_MS - (s.sim % HOUR_MS) + 1_234_567);
+    s = integrate(course, s, HOUR_MS - (s.sim % HOUR_MS) + 1_234_567);
     s = ok(answerReview(course, s, 'a1-bus', false));
     const end = bucketStart(s.sim) + HOUR_MS;
     const got = Num.toNumber(producedBetween(course, s, s.sim, simMs(end)));
@@ -403,7 +403,7 @@ describe('the word bonus (AC2)', () => {
 
   it('keeps each word’s mean over the hour through a purchase', () => {
     let s = played();
-    s = integrate(s, HOUR_MS - (s.sim % HOUR_MS) + 600_000);
+    s = integrate(course, s, HOUR_MS - (s.sim % HOUR_MS) + 600_000);
     const before = wordMultiplier(course, s, tea, simMs(s.sim + 1000));
     const bought = ok(buyEncounter(course, s, 'tea', 1));
     expect(bought.anchor.sim).toBe(s.sim);
@@ -459,7 +459,7 @@ describe('the floor (AC4)', () => {
     s = ok(pickUpWord(course, s));
     s = at(s, 240_000);
     s = ok(answerReview(course, s, 'a1-food', true));
-    const later = integrate(s, Math.round(days * DAY_MS));
+    const later = integrate(course, s, Math.round(days * DAY_MS));
     return wordMultiplier(course, later, tea, later.sim);
   }
 
@@ -494,7 +494,7 @@ describe('the floor (AC4)', () => {
         expect(advance(course, s, wallMs(s.wall + delta)).state.words).toEqual(
           s.words,
         );
-        expect(integrate(s, Math.max(delta, 0)).words).toEqual(s.words);
+        expect(integrate(course, s, Math.max(delta, 0)).words).toEqual(s.words);
       }),
       { numRuns: 200 },
     );
@@ -671,7 +671,7 @@ describe('memory ages on the wall clock (AC9)', () => {
     expect(summary.clipped).toBe(true);
     expect(Num.toTuple(understandingNow(course, back))).toEqual(
       Num.toTuple(
-        understandingNow(course, integrate(s, BALANCE.offline.capMs)),
+        understandingNow(course, integrate(course, s, BALANCE.offline.capMs)),
       ),
     );
     const word = s.words['a1-food'];
@@ -687,7 +687,7 @@ describe('memory ages on the wall clock (AC9)', () => {
 
   it('after a clipped return mid-hour, production to the hour’s end equals the continuous model', () => {
     let s = played();
-    s = integrate(s, HOUR_MS - (s.sim % HOUR_MS) + 1_234_567);
+    s = integrate(course, s, HOUR_MS - (s.sim % HOUR_MS) + 1_234_567);
     const { state: back, summary } = advance(
       course,
       s,

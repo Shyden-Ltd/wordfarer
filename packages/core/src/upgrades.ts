@@ -12,8 +12,10 @@
  * so a level past the last (from an older balance table) cannot exceed it.
  */
 import { BALANCE, type InsightUpgradeId, type StampUpgradeId } from './balance';
-import type { CourseData } from './course';
-import type { GameState } from './state';
+import type { CourseData, Encounter } from './course';
+import { purchaseCost } from './encounters';
+import { Num } from './num';
+import { ownedCount, type GameState } from './state';
 
 export type UpgradeCurrency = 'insight' | 'stamps';
 
@@ -128,6 +130,22 @@ export function encounterCostFactor(state: GameState): number {
       upgradeLevel(state, 'encounterDiscount') * costDiscountPerLevel,
       costDiscountCap,
     )
+  );
+}
+
+/**
+ * What `count` more of `encounter` cost the player now: the listed cost at
+ * the count owned, with the stamp discount. A purchase by hand and one by
+ * Pemandu (#33) pay exactly this.
+ */
+export function encounterPrice(
+  state: GameState,
+  encounter: Encounter,
+  count: number,
+): Num {
+  return Num.mul(
+    purchaseCost(encounter, ownedCount(state, encounter.id), count),
+    Num.from(encounterCostFactor(state)),
   );
 }
 

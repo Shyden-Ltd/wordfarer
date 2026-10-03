@@ -131,7 +131,9 @@ export interface Balance {
   };
   readonly automation: {
     /** Pemandu intervals: the starting one, then each upgrade (design §5). */
-    readonly intervalsMs: readonly number[];
+    readonly intervalsMs: readonly [number, ...number[]];
+    /** Pemandu opens once this many regions are reached (design §5, #33). */
+    readonly opensAtRegion: number;
   };
   readonly sail: {
     /** Destination i needs U_goal(i) = goalU0 x goalGrowth^i earned this run (design §5, #31). */
@@ -243,7 +245,7 @@ export const BALANCE: Balance = deepFreeze({
     maxCapMs: 72 * HOUR_MS,
   },
   grammar: { rootGain: 0.5, costC0: 50, costGrowth: 1.5, opensAtRegion: 2 },
-  automation: { intervalsMs: [10_000, 5_000, 2_000, 1_000] },
+  automation: { intervalsMs: [10_000, 5_000, 2_000, 1_000], opensAtRegion: 2 },
   // Starting values with nothing measured yet; the pacing bots tune them (#35).
   sail: {
     goalU0: 10_000,

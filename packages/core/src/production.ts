@@ -104,6 +104,72 @@ function bucketBonuses(
     });
 }
 
+/** What one bucket's words give an Encounter: M_words, and grammar's ratio if any. */
+interface WordFactors {
+  readonly words: number;
+  readonly grammar: number | undefined;
+}
+
+/** A bucket's word bonuses and, worked out on first use, each Encounter's factors. */
+interface BucketWords {
+  readonly bonuses: readonly TaggedBonus[];
+  readonly factors: Map<Encounter, WordFactors>;
+}
+
+/**
+ * Each bucket's word bonuses, kept by course, then by the words held, then by
+ * everything else `bucketBonuses` reads: `memorySince`, the skew, the grammar
+ * owned and the bucket. A purchase changes none of them, so the purchases
+ * Pemandu makes in a return reuse one bucket's bonuses rather than working
+ * them out again for every word (#33). State is never mutated, so a words
+ * object stands for its contents, as a course does for `lexiconItem`'s index.
+ */
+const bucketMemo = new WeakMap<
+  CourseData,
+  WeakMap<object, Map<string, BucketWords>>
+>();
+
+function bucketWords(
+  course: CourseData,
+  state: GameState,
+  t: SimMs,
+): BucketWords {
+  let byWords = bucketMemo.get(course);
+  if (byWords === undefined) {
+    byWords = new WeakMap();
+    bucketMemo.set(course, byWords);
+  }
+  let byKey = byWords.get(state.words);
+  if (byKey === undefined) {
+    byKey = new Map();
+    byWords.set(state.words, byKey);
+  }
+  const key = JSON.stringify([
+    bucketStart(t),
+    state.memorySince,
+    state.wall - state.sim,
+    state.grammar,
+  ]);
+  let bucket = byKey.get(key);
+  if (bucket === undefined) {
+    bucket = { bonuses: bucketBonuses(course, state, t), factors: new Map() };
+    byKey.set(key, bucket);
+  }
+  return bucket;
+}
+
+function wordFactors(bucket: BucketWords, encounter: Encounter): WordFactors {
+  let factors = bucket.factors.get(encounter);
+  if (factors === undefined) {
+    factors = {
+      words: multiplier(bucket.bonuses, encounter),
+      grammar: grammarRatio(bucket.bonuses, encounter),
+    };
+    bucket.factors.set(encounter, factors);
+  }
+  return factors;
+}
+
 function multiplier(
   bonuses: readonly TaggedBonus[],
   encounter: Encounter,
@@ -141,7 +207,7 @@ export function wordMultiplier(
   encounter: Encounter,
   t: SimMs,
 ): number {
-  return multiplier(bucketBonuses(course, state, t), encounter);
+  return wordFactors(bucketWords(course, state, t), encounter).words;
 }
 
 /** What every Encounter's lines share at one moment. */
@@ -156,17 +222,16 @@ function linesFor(
   state: GameState,
   encounter: Encounter,
   owned: number,
-  bonuses: readonly TaggedBonus[],
+  words: WordFactors,
   shared: Shared,
 ): readonly RateLine[] {
   const lines: RateLine[] = [
     { name: 'encounters', factor: Num.from(encounter.p0 * owned) },
     { name: 'milestones', factor: milestoneFactor(owned) },
-    { name: 'words', factor: Num.from(multiplier(bonuses, encounter)) },
+    { name: 'words', factor: Num.from(words.words) },
   ];
-  const grammar = grammarRatio(bonuses, encounter);
-  if (grammar !== undefined)
-    lines.push({ name: 'grammar', factor: Num.from(grammar) });
+  if (words.grammar !== undefined)
+    lines.push({ name: 'grammar', factor: Num.from(words.grammar) });
   for (const tag of encounter.tags) {
     const id = phrasebookId(tag);
     if (upgradeLevel(state, id) > 0)
@@ -181,6 +246,21 @@ function linesFor(
   return lines;
 }
 
+function sharedAt(course: CourseData, state: GameState, t: SimMs): Shared {
+  const held = heldCards(course, state);
+  return {
+    held,
+    wall: t + state.wall - state.sim,
+    sets: setFactor(course, held),
+    stamps: Num.from(globalMultiplier(state)),
+  };
+}
+
+/** A rate as the product of its lines, multiplied in order. */
+function product(lines: readonly RateLine[]): Num {
+  return lines.reduce((r, l) => Num.mul(r, l.factor), Num.from(1));
+}
+
 /**
  * Each owned Encounter's rate at simulated time `t`, in course order, with
  * the named lines it is the product of (DN6). The words' means are the
@@ -191,29 +271,43 @@ export function rateBreakdown(
   state: GameState,
   t: SimMs,
 ): readonly EncounterRate[] {
-  let bonuses: readonly TaggedBonus[] | undefined;
-  const held = heldCards(course, state);
-  const shared: Shared = {
-    held,
-    wall: t + state.wall - state.sim,
-    sets: setFactor(course, held),
-    stamps: Num.from(globalMultiplier(state)),
-  };
+  let bucket: BucketWords | undefined;
+  const shared = sharedAt(course, state, t);
   const rates: EncounterRate[] = [];
   for (const region of course.regions) {
     for (const encounter of region.encounters) {
       const owned = ownedCount(state, encounter.id);
       if (owned === 0) continue;
-      bonuses ??= bucketBonuses(course, state, t);
-      const lines = linesFor(state, encounter, owned, bonuses, shared);
-      rates.push({
-        id: encounter.id,
-        lines,
-        rate: lines.reduce((r, l) => Num.mul(r, l.factor), Num.from(1)),
-      });
+      bucket ??= bucketWords(course, state, t);
+      const words = wordFactors(bucket, encounter);
+      const lines = linesFor(state, encounter, owned, words, shared);
+      rates.push({ id: encounter.id, lines, rate: product(lines) });
     }
   }
   return rates;
+}
+
+/**
+ * How much one more of an Encounter would raise the rate at simulated time
+ * `t`: its rate with one more, less its rate now, every multiplier included,
+ * so a unit that reaches a milestone gains the doubling of all its kind
+ * (#33). Only its own `encounters` and `milestones` lines move, so the
+ * bucket's word bonuses and the shared lines are worked out once.
+ */
+export function rateGain(
+  course: CourseData,
+  state: GameState,
+  t: SimMs,
+): (encounter: Encounter) => Num {
+  const bucket = bucketWords(course, state, t);
+  const shared = sharedAt(course, state, t);
+  return (encounter) => {
+    const owned = ownedCount(state, encounter.id);
+    const words = wordFactors(bucket, encounter);
+    const now = product(linesFor(state, encounter, owned, words, shared));
+    const more = product(linesFor(state, encounter, owned + 1, words, shared));
+    return Num.sub(more, now);
+  };
 }
 
 /** The total of a breakdown's rates, added in its order. */
@@ -228,30 +322,48 @@ export function rateAt(course: CourseData, state: GameState, t: SimMs): Num {
 
 /** Understanding at the state's simulated time: the anchor's, plus production since. */
 export function understandingNow(course: CourseData, state: GameState): Num {
-  return Num.add(
+  return understandingAfter(
     Num.fromTuple(state.anchor.understanding),
-    producedBetween(course, state, state.anchor.sim, state.sim),
+    rateMs(course, state, state.anchor.sim, state.sim),
   );
 }
 
 /**
- * Understanding produced over `[from, to)`, bucket by bucket, each bucket
- * split at a held festival card's window edges.
+ * Understanding `total` rate-milliseconds past `anchor`: the one way every
+ * walk from an anchor, `understandingNow`'s and Pemandu's, turns what it
+ * added up into Understanding, so both reach the same bits (#33).
  */
-export function producedBetween(
+export function understandingAfter(anchor: Num, total: Num): Num {
+  return Num.add(anchor, Num.div(total, THOUSAND));
+}
+
+/**
+ * The rate-milliseconds still to add to `total` for Understanding walked
+ * from `anchor` to reach `target`; zero or less when it already has.
+ */
+export function rateMsShort(anchor: Num, total: Num, target: Num): Num {
+  return Num.sub(Num.mul(Num.sub(target, anchor), THOUSAND), total);
+}
+
+/** A stretch of simulated time, `[start, end)`, paid at one rate per second. */
+export interface Segment {
+  readonly start: SimMs;
+  readonly end: SimMs;
+  readonly rate: Num;
+}
+
+/**
+ * `[from, to)` cut at each hour bucket's end and at each held festival
+ * card's window edge, in order, with the rate paid over each piece.
+ */
+export function* segments(
   course: CourseData,
   state: GameState,
   from: SimMs,
   to: SimMs,
-): Num {
-  if (to < from) {
-    throw new RangeError(
-      `producedBetween: ${String(to)} is before ${String(from)}`,
-    );
-  }
+): Generator<Segment, void, undefined> {
   const skew = state.wall - state.sim;
   const held = heldCards(course, state);
-  let total = Num.from(0);
   for (let t = from; t < to;) {
     const edge = nextFestivalEdge(held, t + skew);
     const end = simMs(
@@ -268,11 +380,39 @@ export function producedBetween(
         `producedBetween: the segment from ${String(t)} ends at ${String(end)}`,
       );
     }
-    total = Num.add(
-      total,
-      Num.mul(rateAt(course, state, t), Num.from(end - t)),
-    );
+    yield { start: t, end, rate: rateAt(course, state, t) };
     t = end;
   }
-  return Num.div(total, THOUSAND);
+}
+
+/** Rate-milliseconds over `[from, to)`: each segment's rate times its length, added in order. */
+function rateMs(
+  course: CourseData,
+  state: GameState,
+  from: SimMs,
+  to: SimMs,
+): Num {
+  if (to < from) {
+    throw new RangeError(
+      `producedBetween: ${String(to)} is before ${String(from)}`,
+    );
+  }
+  let total = Num.from(0);
+  for (const { start, end, rate } of segments(course, state, from, to)) {
+    total = Num.add(total, Num.mul(rate, Num.from(end - start)));
+  }
+  return total;
+}
+
+/**
+ * Understanding produced over `[from, to)`, bucket by bucket, each bucket
+ * split at a held festival card's window edges.
+ */
+export function producedBetween(
+  course: CourseData,
+  state: GameState,
+  from: SimMs,
+  to: SimMs,
+): Num {
+  return Num.div(rateMs(course, state, from, to), THOUSAND);
 }

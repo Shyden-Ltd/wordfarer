@@ -10,11 +10,16 @@
  * stored quantity re-anchors first, so production up to the action is banked
  * at the rates that held before it.
  */
+import {
+  automationUnlocked,
+  bestPayback,
+  nextPurchaseTick,
+  type PurchaseTick,
+} from './automation';
 import { BALANCE } from './balance';
 import { heldCards } from './cards';
 import { simMs, wallMs, type WallMs } from './clock';
 import type { CourseData, Encounter } from './course';
-import { purchaseCost } from './encounters';
 import { findGrammarNode, grammarNodeCost, ownedGrammarNodes } from './grammar';
 import {
   insightFor,
@@ -36,9 +41,10 @@ import { sailPreview, type SailPreview } from './sail';
 import { ownedCount, pickedWord, type GameState } from './state';
 import { unfold, type Unfold } from './unfold';
 import {
-  encounterCostFactor,
+  encounterPrice,
   findUpgrade,
   offlineCapMs,
+  pemanduIntervalsMs,
   upgradeLevel,
   type UpgradeCurrency,
 } from './upgrades';
@@ -123,6 +129,12 @@ export type Rejection =
       readonly id: string;
       readonly cost: NumTuple;
       readonly held: NumTuple;
+    }
+  | { readonly kind: 'automationLocked'; readonly reached: number }
+  | {
+      readonly kind: 'intervalNotOwned';
+      readonly intervalMs: number;
+      readonly owned: readonly number[];
     };
 
 export type Result =
@@ -165,14 +177,59 @@ export function reanchor(course: CourseData, state: GameState): GameState {
   };
 }
 
-/** Move both clocks forward by `elapsedMs`, uncapped (design §2.3). */
-export function integrate(state: GameState, elapsedMs: number): GameState {
+/**
+ * Move both clocks forward by `elapsedMs`, uncapped (design §2.3). With
+ * Pemandu on, each tick of its grid in `(anchor, new sim]` at which a unit
+ * is affordable buys one, at that tick, re-anchoring there (#33). Each tick
+ * is found from the anchor alone, so splitting the interval makes the same
+ * purchases at the same ticks, and stored arithmetic still cannot tell.
+ */
+export function integrate(
+  course: CourseData,
+  state: GameState,
+  elapsedMs: number,
+): GameState {
   const elapsed = simMs(elapsedMs);
-  return {
+  const until = simMs(state.sim + elapsed);
+  let current = state;
+  if (state.automation.enabled) {
+    let found = nextPurchaseTick(course, current, until).next;
+    while (found !== undefined) {
+      current = pemanduBuys(course, current, found);
+      found = nextPurchaseTick(course, current, until).next;
+    }
+  }
+  return { ...current, sim: until, wall: wallMs(state.wall + elapsed) };
+}
+
+/**
+ * One Pemandu tick: the state moved to the tick, the skew between its
+ * clocks kept, buys one unit of the best payback there, exactly as a
+ * purchase by hand would. It is anchored at the tick first with the
+ * Understanding `nextPurchaseTick` tested there, the bits `reanchor` would
+ * store, so the purchase's own re-anchor walks nothing. That a unit is
+ * affordable there is `nextPurchaseTick`'s finding, so a refusal means the
+ * two disagree, and that is thrown, never skipped.
+ */
+function pemanduBuys(
+  course: CourseData,
+  state: GameState,
+  { tick, understanding }: PurchaseTick,
+): GameState {
+  const at: GameState = {
     ...state,
-    sim: simMs(state.sim + elapsed),
-    wall: wallMs(state.wall + elapsed),
+    sim: tick,
+    wall: wallMs(state.wall + tick - state.sim),
+    anchor: { sim: tick, understanding: Num.toTuple(understanding) },
   };
+  const id = bestPayback(course, at);
+  const bought = id === undefined ? undefined : buyEncounter(course, at, id, 1);
+  if (bought === undefined || !bought.ok) {
+    throw new Error(
+      `Pemandu found a unit affordable at ${String(tick)} but bought none: ${JSON.stringify(bought)}`,
+    );
+  }
+  return bought.state;
 }
 
 /**
@@ -191,14 +248,16 @@ export function advance(
   const elapsed = now - state.wall;
   const cap = offlineCapMs(state);
   const credited = Math.min(Math.max(elapsed, 0), cap);
-  let next = integrate(state, credited);
+  let next = integrate(course, state, credited);
   const clipped = elapsed > cap;
   if (clipped) {
     next = { ...reanchor(course, next), wall: now, memorySince: next.sim };
   }
-  const earned = Num.sub(
-    understandingNow(course, next),
-    understandingNow(course, state),
+  // Earned is what was produced: what is held now less what was held, plus
+  // what Pemandu spent in between (#33).
+  const earned = Num.add(
+    Num.sub(understandingNow(course, next), understandingNow(course, state)),
+    Num.sub(Num.fromTuple(next.runSpent), Num.fromTuple(state.runSpent)),
   );
   return {
     state: next,
@@ -275,10 +334,7 @@ export function buyEncounter(
     return { ok: false, rejection: { kind: 'invalidCount', count } };
   }
   const owned = ownedCount(state, id);
-  const cost = Num.mul(
-    purchaseCost(encounter, owned, count),
-    Num.from(encounterCostFactor(state)),
-  );
+  const cost = encounterPrice(state, encounter, count);
   const anchored = reanchor(course, state);
   const understanding = Num.fromTuple(anchored.anchor.understanding);
   if (Num.cmp(understanding, cost) < 0) {
@@ -532,5 +588,37 @@ export function buyGrammarNode(
       insight: Num.toTuple(Num.sub(held, cost)),
       grammar: [...anchored.grammar, id],
     },
+  };
+}
+
+/**
+ * Turn Pemandu on or off at interval `intervalMs` (design §5, #33). Refused,
+ * in this order, before Pemandu opens, or at an interval the player does not
+ * own; both are judged when turning it off too, so every setting accepted is
+ * one the player could choose. Production up to now is banked first, so the
+ * ticks of the new setting start after it.
+ */
+export function setAutomation(
+  course: CourseData,
+  state: GameState,
+  enabled: boolean,
+  intervalMs: number,
+): Result {
+  if (!automationUnlocked(course, state)) {
+    return {
+      ok: false,
+      rejection: { kind: 'automationLocked', reached: state.reached },
+    };
+  }
+  const owned = pemanduIntervalsMs(state);
+  if (!owned.includes(intervalMs)) {
+    return {
+      ok: false,
+      rejection: { kind: 'intervalNotOwned', intervalMs, owned },
+    };
+  }
+  return {
+    ok: true,
+    state: { ...reanchor(course, state), automation: { enabled, intervalMs } },
   };
 }
