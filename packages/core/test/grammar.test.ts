@@ -7,12 +7,14 @@ import type {
   LexiconItem,
   Region,
 } from '../src/course';
-import { grammarNodeCost } from '../src/grammar';
+import { grammarNodeCost, rootFactors } from '../src/grammar';
+import { newWordMemory } from '../src/memory';
 import { Num, type NumTuple } from '../src/num';
-import { understandingNow } from '../src/production';
+import { rateBreakdown, understandingNow } from '../src/production';
 import {
   buyGrammarNode,
   integrate,
+  view,
   type Rejection,
   type Result,
 } from '../src/sim';
@@ -287,5 +289,120 @@ describe('buyGrammarNode (#32 AC1)', () => {
     ['locked before unaffordable', stateAt(3, 0), 'me-', 'grammarNodeLocked'],
   ])('checks %s', (_, s, id, kind) => {
     expect(rejected(buyGrammarNode(course, s, id)).kind).toBe(kind);
+  });
+});
+
+/**
+ * Every word below is held unreviewed, so its mean R is 0 and its bonus is
+ * heard's 0.02 x the floor share 0.5 = 0.01 (parent §3.3). Region 1's first
+ * destination holds ajar, makan and teh on food and jalan on travel, so a
+ * food Encounter's words line is 1 + 3 x 0.01 = 1.03 and travel's is 1.01.
+ */
+function holding(grammar: readonly string[]): GameState {
+  const s = stateAt(4, 0, grammar);
+  return {
+    ...s,
+    words: Object.fromEntries(
+      ['ajar', 'makan', 'teh', 'jalan'].map((id) => [id, newWordMemory(START)]),
+    ),
+  };
+}
+
+/** Encounter `id`'s lines as [name, value] pairs. */
+function linesOf(s: GameState, id: string): [string, number][] {
+  const rate = rateBreakdown(course, s, s.sim).find((e) => e.id === id);
+  if (rate === undefined) throw new Error(`${id} is not owned`);
+  return rate.lines.map((l) => [l.name, Num.toNumber(l.factor)]);
+}
+
+function line(s: GameState, id: string, name: string): number | undefined {
+  return linesOf(s, id).find(([n]) => n === name)?.[1];
+}
+
+describe('the grammar multiplier (#32 AC2)', () => {
+  it.each<[string, readonly string[], number]>([
+    // ajar x 1.5: (1 + 0.015 + 0.01 + 0.01) / 1.03
+    ['ber- multiplies ajar alone', ['ber-'], 1.035 / 1.03],
+    // ajar and makan x 1.5: (1 + 0.015 + 0.015 + 0.01) / 1.03
+    ['me- multiplies ajar and makan', ['me-'], 1.04 / 1.03],
+    // makan x 1.5, from a region-2 node
+    ['di- multiplies makan alone', ['di-'], 1.035 / 1.03],
+    // ajar x 1.5 x 1.5 and makan x 1.5: (1 + 0.0225 + 0.015 + 0.01) / 1.03
+    ['ber- and me- compound on ajar', ['ber-', 'me-'], 1.0475 / 1.03],
+  ])('%s on a food Encounter', (_, grammar, want) => {
+    expect(line(holding(grammar), 'food0', 'grammar')).toBeCloseTo(want, 12);
+  });
+
+  it.each<[string, readonly string[]]>([
+    ['nothing owned', []],
+    ['ber-', ['ber-']],
+    ['ber- and me-', ['ber-', 'me-']],
+  ])('leaves the words line at 1.03 with %s', (_, grammar) => {
+    expect(line(holding(grammar), 'food0', 'words')).toBeCloseTo(1.03, 12);
+  });
+
+  it('leaves an Encounter whose words no owned node covers unchanged: no grammar line', () => {
+    // jalan, travel's only word, has no node at region 2.
+    const s = holding(['ber-', 'me-', 'di-']);
+    expect(line(s, 'travel0', 'grammar')).toBeUndefined();
+    expect(line(s, 'travel0', 'words')).toBeCloseTo(1.01, 12);
+    // Liveness: the travel Encounter is in the breakdown.
+    expect(linesOf(s, 'travel0').length).toBeGreaterThan(2);
+  });
+
+  it('shows no grammar line before a node is owned', () => {
+    expect(line(holding([]), 'food0', 'grammar')).toBeUndefined();
+    expect(line(holding([]), 'food0', 'words')).toBeCloseTo(1.03, 12);
+  });
+
+  it('pays the multiplied rate: words x grammar is 1 + the multiplied bonuses', () => {
+    const s = holding(['ber-', 'me-']);
+    const lines = linesOf(s, 'food0');
+    const product = lines.reduce((p, [, v]) => p * v, 1);
+    const rate = rateBreakdown(course, s, s.sim).find((e) => e.id === 'food0');
+    expect(Num.toNumber(rate?.rate ?? Num.from(0))).toBeCloseTo(product, 12);
+    // 1 food0 at p0 = 1, no milestone, no stamps: the rate is 1.0475.
+    expect(Num.toNumber(rate?.rate ?? Num.from(0))).toBeCloseTo(1.0475, 12);
+  });
+});
+
+describe('rootFactors (#32 AC2)', () => {
+  it('gives each covered root 1.5 per owned node on it', () => {
+    expect(rootFactors(course, holding(['ber-', 'me-']))).toEqual(
+      new Map([
+        ['ajar', 2.25],
+        ['makan', 1.5],
+      ]),
+    );
+  });
+
+  it('is empty with no node owned', () => {
+    expect(rootFactors(course, holding([])).size).toBe(0);
+  });
+
+  it('refuses an owned node the course does not have', () => {
+    expect(() => rootFactors(course, holding(['pe-an']))).toThrow(
+      /grammar node pe-an is not in course grammar-course/,
+    );
+  });
+});
+
+describe('the grammar breakdown line (#32 AC4, DN6)', () => {
+  it('names grammar after words and before stamps', () => {
+    expect(linesOf(holding(['ber-']), 'food0').map(([n]) => n)).toEqual([
+      'encounters',
+      'milestones',
+      'words',
+      'grammar',
+      'stamps',
+    ]);
+  });
+
+  it('reaches the player through view', () => {
+    const s = holding(['ber-']);
+    const food = view(course, s, s.wall).breakdown.find(
+      (e) => e.id === 'food0',
+    );
+    expect(food?.lines.map((l) => l.name)).toContain('grammar');
   });
 });
