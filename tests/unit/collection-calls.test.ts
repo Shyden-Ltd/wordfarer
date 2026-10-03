@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { minus } from './burn-down';
 import {
   scanCollection,
   type CollectionScan,
   type RefusedCall,
 } from './collection-calls';
+import { trackedFiles } from './tracked-files';
 
 /**
  * No workspace code at collection (Refs #97).
@@ -696,5 +699,101 @@ suite();`).unclassified,
     ).toEqual([
       'line 2: (Math.random() > 1 ? integrate : String)(1) has no root name to resolve',
     ]);
+  });
+});
+
+/**
+ * Every call that reached workspace code at collection on the day #97's guard
+ * landed (12, in four files). `file :: scope :: call -> reaches`. The guard
+ * fails on a site missing from this list AND on an entry that no longer
+ * matches a site. Never add an entry: compute the value inside the test, or
+ * in a hook.
+ */
+const BURN_DOWN: readonly string[] = [
+  'packages/core/test/automation.test.ts :: rateGain (AC2) :: review -> review (../src/memory)',
+  'packages/core/test/automation.test.ts :: rateGain (AC2) :: newWordMemory -> newWordMemory (../src/memory)',
+  'packages/core/test/automation.test.ts :: rateGain (AC2) :: at -> at -> initialState (../src/state)',
+  'packages/core/test/grammar.test.ts :: buyGrammarNode (#32 AC1) :: stateAt -> stateAt -> initialState (../src/state)',
+  'packages/core/test/grammar.test.ts :: buyGrammarNode (#32 AC1) :: stateAt -> stateAt -> initialState (../src/state)',
+  'packages/core/test/grammar.test.ts :: buyGrammarNode (#32 AC1) :: stateAt -> stateAt -> initialState (../src/state)',
+  'packages/core/test/pemandu-perf.test.ts :: (module) :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
+  'packages/core/test/pemandu-perf.test.ts :: the bucket memo behind a fast return :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
+  'packages/core/test/sail.test.ts :: the preview (AC2, DN3) :: at -> at -> initialState (../src/state)',
+  'packages/core/test/sail.test.ts :: a sail resets only Encounters and Understanding (AC3, DN3) :: at -> at -> initialState (../src/state)',
+  'packages/core/test/sail.test.ts :: a sail resets only Encounters and Understanding (AC3, DN3) :: tuple -> tuple -> Num (../src/num)',
+  'packages/core/test/sail.test.ts :: a sail resets only Encounters and Understanding (AC3, DN3) :: startJourney -> startJourney (../src/journeys)',
+];
+
+const TEST_FILE = /\.(test|spec)\.ts$/;
+
+/** A describe call in raw text: `describe(`, `describe.each(`, `test.describe(`. */
+const RAW_DESCRIBE_CALL = /(^|[^\w.$])((it|test)\.)?describe(\.\w+)*\s*\(/m;
+
+/** Every tracked test file and what the detector read in it, scanned inside each test, never at collection. */
+const scan = () => {
+  const files = trackedFiles().filter((path) => TEST_FILE.test(path));
+  const read = files.map((file) => {
+    const source = readFileSync(file, 'utf8');
+    return { file, source, scan: scanCollection(source, file) };
+  });
+  const withDescribe = read.filter(({ source }) =>
+    RAW_DESCRIBE_CALL.test(source),
+  );
+  return {
+    files,
+    describes: read.reduce((n, { scan }) => n + scan.describes, 0),
+    judged: read.reduce((n, { scan }) => n + scan.judged, 0),
+    sites: read.flatMap(({ file, scan }) =>
+      scan.refused.map(
+        (site) => `${file} :: ${site.scope} :: ${site.call} -> ${site.reaches}`,
+      ),
+    ),
+    unclassified: read.flatMap(({ file, scan }) =>
+      scan.unclassified.map((what) => `${file} ${what}`),
+    ),
+    withDescribe: withDescribe.length,
+    unread: withDescribe
+      .filter(({ scan }) => scan.describes < 1)
+      .map(({ file }) => file),
+  };
+};
+
+describe('the suite', () => {
+  it('scans every tracked test file, this one included', () => {
+    const { files } = scan();
+    expect(files).toContain('tests/unit/collection-calls.test.ts');
+    expect(files).toContain('packages/core/test/grammar.test.ts');
+    expect(files).toContain('tests/engines/golden-vectors.spec.ts');
+    // Measured 44 at T2's head (#97). Lower it only in the commit that removes a test file.
+    expect(files.length).toBeGreaterThan(43);
+  });
+
+  it('reads the describe callbacks in them, counted as callbacks, not files', () => {
+    // Measured 153 at T2's head (#97). Lower it only in the commit that removes describes.
+    expect(scan().describes).toBeGreaterThan(152);
+  });
+
+  it('judges the calls they evaluate at collection, counted as calls', () => {
+    // Measured 288 at T2's head (#97). Lower it only in the commit that moves calls out of collection.
+    expect(scan().judged).toBeGreaterThan(287);
+  });
+
+  it('reads a describe callback in every file whose text holds a describe call', () => {
+    const { withDescribe, unread } = scan();
+    // Measured 43 at T2's head (#97).
+    expect(withDescribe).toBeGreaterThan(42);
+    expect(unread).toEqual([]);
+  });
+
+  it('classifies every call evaluated at collection, refusing by name what it cannot follow', () => {
+    expect(scan().unclassified).toEqual([]);
+  });
+
+  it('reaches no workspace code at collection beyond the burn-down list', () => {
+    expect(minus(scan().sites, BURN_DOWN)).toEqual([]);
+  });
+
+  it('keeps no burn-down entry that has already been converted', () => {
+    expect(minus(BURN_DOWN, scan().sites)).toEqual([]);
   });
 });
