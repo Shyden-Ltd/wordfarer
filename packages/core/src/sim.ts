@@ -10,6 +10,7 @@
  * stored quantity re-anchors first, so production up to the action is banked
  * at the rates that held before it.
  */
+import { automationUnlocked } from './automation';
 import { BALANCE } from './balance';
 import { heldCards } from './cards';
 import { simMs, wallMs, type WallMs } from './clock';
@@ -39,6 +40,7 @@ import {
   encounterCostFactor,
   findUpgrade,
   offlineCapMs,
+  pemanduIntervalsMs,
   upgradeLevel,
   type UpgradeCurrency,
 } from './upgrades';
@@ -123,6 +125,12 @@ export type Rejection =
       readonly id: string;
       readonly cost: NumTuple;
       readonly held: NumTuple;
+    }
+  | { readonly kind: 'automationLocked'; readonly reached: number }
+  | {
+      readonly kind: 'intervalNotOwned';
+      readonly intervalMs: number;
+      readonly owned: readonly number[];
     };
 
 export type Result =
@@ -532,5 +540,37 @@ export function buyGrammarNode(
       insight: Num.toTuple(Num.sub(held, cost)),
       grammar: [...anchored.grammar, id],
     },
+  };
+}
+
+/**
+ * Turn Pemandu on or off at interval `intervalMs` (design §5, #33). Refused,
+ * in this order, before Pemandu opens, or at an interval the player does not
+ * own; both are judged when turning it off too, so every setting accepted is
+ * one the player could choose. Production up to now is banked first, so the
+ * ticks of the new setting start after it.
+ */
+export function setAutomation(
+  course: CourseData,
+  state: GameState,
+  enabled: boolean,
+  intervalMs: number,
+): Result {
+  if (!automationUnlocked(course, state)) {
+    return {
+      ok: false,
+      rejection: { kind: 'automationLocked', reached: state.reached },
+    };
+  }
+  const owned = pemanduIntervalsMs(state);
+  if (!owned.includes(intervalMs)) {
+    return {
+      ok: false,
+      rejection: { kind: 'intervalNotOwned', intervalMs, owned },
+    };
+  }
+  return {
+    ok: true,
+    state: { ...reanchor(course, state), automation: { enabled, intervalMs } },
   };
 }

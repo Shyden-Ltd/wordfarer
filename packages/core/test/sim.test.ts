@@ -113,6 +113,7 @@ describe('initialState', () => {
       runSpent: [0, 0],
       playableRegions: 3,
       grammar: [],
+      automation: { enabled: false, intervalMs: 10_000 },
     });
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
   });
@@ -278,6 +279,7 @@ const arbState = fc
     runSpent: Num.toTuple(Num.from(0)),
     playableRegions: 3,
     grammar: [],
+    automation: { enabled: false, intervalMs: 10_000 },
   }));
 
 describe('integrate (AC6)', () => {

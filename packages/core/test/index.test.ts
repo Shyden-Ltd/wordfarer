@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as core from '../src/index';
 
 /**
- * The words and memory API (#28), the upgrades API (#29), the route (#31)
- * and grammar (#32) are reachable
+ * The words and memory API (#28), the upgrades API (#29), the route (#31),
+ * grammar (#32) and Pemandu (#33) are reachable
  * from the package entry point, which is all the UI and the pacing bots
  * import.
  */
@@ -48,6 +48,9 @@ describe('the package entry point', () => {
     'wordsHeld',
     'understandingNow',
     'unfold',
+    'setAutomation',
+    'automationOpensAt',
+    'automationUnlocked',
   ] as const)
     it(`exports ${name}`, () => {
       expect(core[name]).toBeTypeOf('function');

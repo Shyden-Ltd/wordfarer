@@ -452,18 +452,18 @@ describe('packages/core/src holds no value-import cycle', () => {
   });
 
   it('reads every module (liveness)', () => {
-    // Measured 20 modules on develop d4b1f94's tree (#92). Lower it only in the commit that removes one.
-    expect(coreGraph().modules.length).toBeGreaterThan(19);
+    // Measured 21 modules with automation.ts (#33; 20 on develop d4b1f94, #92). Lower it only in the commit that removes one.
+    expect(coreGraph().modules.length).toBeGreaterThan(20);
   });
 
   it('judges every relative import and export declaration (liveness)', () => {
-    // Measured 97 declarations on develop d4b1f94's tree (#92), type-only ones included.
-    expect(coreGraph().declarations).toBeGreaterThan(96);
+    // Measured 104 declarations with automation.ts (#33; 97 on develop d4b1f94, #92), type-only ones included.
+    expect(coreGraph().declarations).toBeGreaterThan(103);
   });
 
   it('draws an edge for every module a value is imported from (liveness)', () => {
-    // Measured 77 edges on develop d4b1f94's tree (#92): the population the cycle check judges.
-    expect(edgeCount(coreGraph())).toBeGreaterThan(76);
+    // Measured 82 edges with automation.ts (#33; 77 on develop d4b1f94, #92): the population the cycle check judges.
+    expect(edgeCount(coreGraph())).toBeGreaterThan(81);
   });
 
   it('reads each module’s relative imports as its raw text counts them', () => {

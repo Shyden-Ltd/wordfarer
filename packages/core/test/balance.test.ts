@@ -164,9 +164,9 @@ describe('BALANCE', () => {
       { rootGain: 0.5, costC0: 50, costGrowth: 1.5, opensAtRegion: 2 },
     ],
     [
-      'design §5: Pemandu 10 s, then 5 s, 2 s, 1 s',
-      (b) => b.automation.intervalsMs,
-      [10_000, 5_000, 2_000, 1_000],
+      'design §5: Pemandu 10 s, then 5 s, 2 s, 1 s, open from region 2 (#33)',
+      (b) => b.automation,
+      { intervalsMs: [10_000, 5_000, 2_000, 1_000], opensAtRegion: 2 },
     ],
     [
       'design §5: Mastery goal x 1.5 per replay',
