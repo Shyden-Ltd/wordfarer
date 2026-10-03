@@ -710,9 +710,6 @@ suite();`).unclassified,
  * in a hook.
  */
 const BURN_DOWN: readonly string[] = [
-  'packages/core/test/automation.test.ts :: rateGain (AC2) :: review -> review (../src/memory)',
-  'packages/core/test/automation.test.ts :: rateGain (AC2) :: newWordMemory -> newWordMemory (../src/memory)',
-  'packages/core/test/automation.test.ts :: rateGain (AC2) :: at -> at -> initialState (../src/state)',
   'packages/core/test/pemandu-perf.test.ts :: (module) :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
   'packages/core/test/pemandu-perf.test.ts :: the bucket memo behind a fast return :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
 ];
@@ -767,8 +764,8 @@ describe('the suite', () => {
   });
 
   it('judges the calls they evaluate at collection, counted as calls', () => {
-    // Measured 278 after #97 moved sail.test.ts's fixture states into its tests. Lower it only in the commit that moves calls out of collection.
-    expect(scan().judged).toBeGreaterThan(277);
+    // Measured 272 after #97 moved automation.test.ts's rateGain state into its test. Lower it only in the commit that moves calls out of collection.
+    expect(scan().judged).toBeGreaterThan(271);
   });
 
   it('reads a describe callback in every file whose text holds a describe call', () => {
