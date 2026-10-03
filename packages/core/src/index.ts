@@ -85,6 +85,13 @@ export {
 } from './memory';
 export { pickUpCost, pickUpPool } from './words';
 export {
+  currentDestination,
+  currentRegion,
+  regionsReached,
+  route,
+  type Stop,
+} from './route';
+export {
   advance,
   answerPractice,
   answerReview,

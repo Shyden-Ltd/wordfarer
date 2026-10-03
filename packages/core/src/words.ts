@@ -24,25 +24,15 @@ const PICK_UP_C0 = Num.from(BALANCE.words.pickUpC0);
 const PICK_UP_GROWTH = Num.from(BALANCE.words.pickUpGrowth);
 
 /**
- * The destination words are picked up from: the course's first until Set
- * Sail (#31) moves the player on.
- */
-export function currentDestination(
-  course: CourseData,
-): Destination | undefined {
-  return course.regions[0]?.destinations[0];
-}
-
-/**
- * The pick-up pool in curriculum order: the current destination's lexicon,
- * then the phrase packs of `held` (the held cards, in course order), sorted
- * by CEFR.
+ * The pick-up pool in curriculum order: `destination`'s lexicon (the current
+ * one, from `route.ts`), then the phrase packs of `held` (the held cards, in
+ * course order), sorted by CEFR.
  */
 export function pickUpPool(
-  course: CourseData,
+  destination: Destination | undefined,
   held: readonly CultureCard[],
 ): readonly LexiconItem[] {
-  const lexicon = currentDestination(course)?.lexicon ?? [];
+  const lexicon = destination?.lexicon ?? [];
   // Array.prototype.sort is stable, so equal CEFR keeps the pool's order.
   return [...lexicon, ...held.flatMap((card) => card.phrasePack)].sort(
     (a, b) => CEFR_ORDER[a.cefr] - CEFR_ORDER[b.cefr],

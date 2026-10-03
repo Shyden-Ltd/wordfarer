@@ -21,6 +21,7 @@ import type { CourseData, CultureCard } from './course';
 import { Num } from './num';
 import { rateAt } from './production';
 import { intFrom } from './rng';
+import { currentRegion } from './route';
 import { reanchor, type Rejection, type Result } from './sim';
 import type { GameState, Journey } from './state';
 import { journeyDurationFactor, journeySlots } from './upgrades';
@@ -28,12 +29,12 @@ import { journeyDurationFactor, journeySlots } from './upgrades';
 /** What a slot holds: `locked` until bought, then `empty`, `away` or `returned`. */
 export type JourneyStatus = 'locked' | 'empty' | 'away' | 'returned';
 
-/**
- * The cards Journeys draw from: the current region's, in course order. The
- * current region is the course's first until Set Sail (#31) moves it on.
- */
-export function cardPool(course: CourseData): readonly CultureCard[] {
-  return course.regions[0]?.cultureCards ?? [];
+/** The cards Journeys draw from: the current region's, in course order. */
+export function cardPool(
+  course: CourseData,
+  state: GameState,
+): readonly CultureCard[] {
+  return currentRegion(course, state).cultureCards;
 }
 
 function durationIndex(durationId: string): number {
@@ -117,7 +118,7 @@ export function startJourney(
   if (id === 'tutorial' && state.tutorialJourneyUsed) {
     return { ok: false, rejection: { kind: 'tutorialUsed' } };
   }
-  const pool = cardPool(course);
+  const pool = cardPool(course, state);
   if (pool.length === 0) {
     return { ok: false, rejection: { kind: 'noCards' } };
   }

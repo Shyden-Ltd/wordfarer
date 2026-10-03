@@ -38,10 +38,16 @@ import {
   upgradeLevel,
   type UpgradeCurrency,
 } from './upgrades';
+import { currentDestination, regionsReached } from './route';
 import { pickUpCost, pickUpPool } from './words';
 
 export type Rejection =
   | { readonly kind: 'unknownEncounter'; readonly id: string }
+  | {
+      readonly kind: 'encounterLocked';
+      readonly id: string;
+      readonly region: number;
+    }
   | { readonly kind: 'invalidCount'; readonly count: number }
   | {
       readonly kind: 'unaffordable';
@@ -204,24 +210,35 @@ export function listen(course: CourseData, state: GameState): GameState {
   };
 }
 
-function findEncounter(course: CourseData, id: string): Encounter | undefined {
-  for (const region of course.regions) {
-    const found = region.encounters.find((e) => e.id === id);
-    if (found !== undefined) return found;
+function findEncounter(
+  course: CourseData,
+  id: string,
+): { readonly encounter: Encounter; readonly region: number } | undefined {
+  for (const [region, { encounters }] of course.regions.entries()) {
+    const encounter = encounters.find((e) => e.id === id);
+    if (encounter !== undefined) return { encounter, region };
   }
   return undefined;
 }
 
-/** Buy `count` of Encounter `id` at the state's simulated time. */
+/**
+ * Buy `count` of Encounter `id` at the state's simulated time. Encounters
+ * come from every region reached so far (operator, 2026-10-03); one from a
+ * later region is refused. The cost counts towards this run's spend.
+ */
 export function buyEncounter(
   course: CourseData,
   state: GameState,
   id: string,
   count: number,
 ): Result {
-  const encounter = findEncounter(course, id);
-  if (encounter === undefined) {
+  const found = findEncounter(course, id);
+  if (found === undefined) {
     return { ok: false, rejection: { kind: 'unknownEncounter', id } };
+  }
+  const { encounter, region } = found;
+  if (region >= regionsReached(course, state)) {
+    return { ok: false, rejection: { kind: 'encounterLocked', id, region } };
   }
   if (!Number.isSafeInteger(count) || count < 1) {
     return { ok: false, rejection: { kind: 'invalidCount', count } };
@@ -252,17 +269,27 @@ export function buyEncounter(
         understanding: Num.toTuple(Num.sub(understanding, cost)),
       },
       owned: { ...anchored.owned, [id]: owned + count },
+      runSpent: spent(anchored, cost),
     },
   };
+}
+
+/** This run's spend after paying `cost`: it stays part of `U_run` (#31). */
+function spent(state: GameState, cost: Num): NumTuple {
+  return Num.toTuple(Num.add(Num.fromTuple(state.runSpent), cost));
 }
 
 /**
  * Pick up the next word of the pick-up pool in curriculum order, paying for
  * it from Understanding (parent §3.3): the current destination's lexicon and
- * the held cards' phrase packs (#30).
+ * the held cards' phrase packs (#30). The cost counts towards this run's
+ * spend.
  */
 export function pickUpWord(course: CourseData, state: GameState): Result {
-  const pool = pickUpPool(course, heldCards(course, state));
+  const pool = pickUpPool(
+    currentDestination(course, state),
+    heldCards(course, state),
+  );
   const next = pool.find((item) => pickedWord(state, item.id) === undefined);
   if (next === undefined) {
     return { ok: false, rejection: { kind: 'poolEmpty' } };
@@ -292,6 +319,7 @@ export function pickUpWord(course: CourseData, state: GameState): Result {
         understanding: Num.toTuple(Num.sub(understanding, cost)),
       },
       words: { ...anchored.words, [next.id]: newWordMemory(state.wall) },
+      runSpent: spent(anchored, cost),
     },
   };
 }
