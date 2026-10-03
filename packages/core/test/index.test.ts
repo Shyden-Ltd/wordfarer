@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest';
 import * as core from '../src/index';
 
 /**
- * The words and memory API (#28), the upgrades API (#29) and the route
- * (#31) are reachable
+ * The words and memory API (#28), the upgrades API (#29), the route (#31)
+ * and grammar (#32) are reachable
  * from the package entry point, which is all the UI and the pacing bots
  * import.
  */
 describe('the package entry point', () => {
   for (const name of [
     'pickUpWord',
+    'buyGrammarNode',
+    'findGrammarNode',
+    'grammarNodeCost',
     'answerReview',
     'answerPractice',
     'pickUpCost',
