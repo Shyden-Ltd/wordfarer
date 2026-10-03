@@ -329,26 +329,31 @@ const twins: CourseData = {
 };
 
 describe('rateGain (AC2)', () => {
-  // Reviewed two days before the game, so each word's bonus depends on the
-  // hour bucket the gain is taken in.
-  const reviewedAt = wallMs(START - 2 * 86_400_000);
-  const words = Object.fromEntries(
-    ['r0-d0-w0', 'r0-d0-w1'].map((id) => [
-      id,
-      review(newWordMemory(reviewedAt), reviewedAt, true),
-    ]),
-  );
-  const s = at(4, {
-    owned: { tea: 9, inn: 3, ferry1: 1 },
-    upgrades: { 'phrasebook:food': 1 },
-    words,
-    simMs: 5 * 3_600_000 + 17,
-  });
+  /**
+   * Words reviewed two days before the game, so each word's bonus depends on
+   * the hour bucket the gain is taken in. Built per test, so a throwing setup
+   * fails each test by name, never the file (#97).
+   */
+  function gainState(): GameState {
+    const reviewedAt = wallMs(START - 2 * 86_400_000);
+    return at(4, {
+      owned: { tea: 9, inn: 3, ferry1: 1 },
+      upgrades: { 'phrasebook:food': 1 },
+      words: Object.fromEntries(
+        ['r0-d0-w0', 'r0-d0-w1'].map((id) => [
+          id,
+          review(newWordMemory(reviewedAt), reviewedAt, true),
+        ]),
+      ),
+      simMs: 5 * 3_600_000 + 17,
+    });
+  }
   const reachable = shop.regions.flatMap((r) => r.encounters);
 
   it.each(reachable.map((e) => [e.id, e] as const))(
     '%s: its rate with one more, less its rate now, bit for bit',
     (_id, encounter) => {
+      const s = gainState();
       const gain = rateGain(shop, s, s.sim)(encounter);
       const plus = {
         ...s,

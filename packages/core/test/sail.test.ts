@@ -269,8 +269,9 @@ describe('the stamps a sail pays (AC2)', () => {
 
 describe('the preview (AC2, DN3)', () => {
   // Spent and held differ, and the levels add to more than the upgrades
-  // owned, so a preview reading the wrong one is caught.
-  const before = {
+  // owned, so a preview reading the wrong one is caught. Built per test, so
+  // a throwing setup fails each test by name, never the file (#97).
+  const before = (): GameState => ({
     ...at(2, { held: goalU(2) * 4, spent: 77 }),
     owned: { e0: 3 },
     stamps: 2,
@@ -278,10 +279,10 @@ describe('the preview (AC2, DN3)', () => {
     cards: ['c0'],
     upgrades: { startingUnderstanding: 2, journeySlot2: 1 },
     grammar: ['g0', 'g1'],
-  };
+  });
   // Computed per test, so a failing sail fails each test, not the file.
-  const preview = () => view(course, before, before.wall).sail;
-  const after = () => ok(setSail(course, before));
+  const preview = () => view(course, before(), before().wall).sail;
+  const after = () => ok(setSail(course, before()));
 
   it('names the destination and the next one', () => {
     expect(preview().destination).toBe('r0-d2');
@@ -293,7 +294,7 @@ describe('the preview (AC2, DN3)', () => {
     expect(n(preview().goal.understanding)).toBe(goalU(2));
     expect(preview().goal.words).toBe(goalWords(2));
     expect(n(preview().progress.understanding)).toBe(
-      n(runUnderstanding(course, before)),
+      n(runUnderstanding(course, before())),
     );
     expect(preview().progress.words).toBe(goalWords(2));
   });
@@ -301,7 +302,7 @@ describe('the preview (AC2, DN3)', () => {
   it('resets exactly the Encounters owned and the Understanding held', () => {
     expect(preview().resets.encounters).toEqual({ e0: 3 });
     expect(n(preview().resets.understanding)).toBe(
-      n(understandingNow(course, before)),
+      n(understandingNow(course, before())),
     );
     expect(after().owned).toEqual({});
   });
@@ -313,7 +314,7 @@ describe('the preview (AC2, DN3)', () => {
 
   it('pays exactly the stamps the sail adds', () => {
     expect(preview().gains.stamps).toBe(6);
-    expect(after().stampsEarned - before.stampsEarned).toBe(
+    expect(after().stampsEarned - before().stampsEarned).toBe(
       preview().gains.stamps,
     );
   });
@@ -367,7 +368,9 @@ describe('the preview (AC2, DN3)', () => {
 });
 
 describe('a sail resets only Encounters and Understanding (AC3, DN3)', () => {
-  const before: GameState = {
+  // Built per test, so a throwing setup fails each test by name, never the
+  // file (#97).
+  const before = (): GameState => ({
     ...at(2, { held: goalU(2) * 4, spent: 77 }),
     owned: { e0: 3 },
     insight: tuple(12),
@@ -377,10 +380,10 @@ describe('a sail resets only Encounters and Understanding (AC3, DN3)', () => {
     cards: ['c0'],
     tutorialJourneyUsed: true,
     grammar: ['g0'],
-  };
-  const out = ok(startJourney(course, before, 0, '2h'));
+  });
+  const out = () => ok(startJourney(course, before(), 0, '2h'));
   // Computed per test, so a failing sail fails each test, not the file.
-  const after = () => ok(setSail(course, out));
+  const after = () => ok(setSail(course, out()));
 
   /** The keys a sail is allowed to change: the reset, the gain and the position. */
   const CHANGED = [
@@ -395,17 +398,17 @@ describe('a sail resets only Encounters and Understanding (AC3, DN3)', () => {
 
   it('changes nothing else: every other key is deep-equal', () => {
     // Read from the state itself, so a key added later is covered.
-    const kept = Object.keys(out).filter((k) => !CHANGED.includes(k));
+    const kept = Object.keys(out()).filter((k) => !CHANGED.includes(k));
     expect(kept.length).toBeGreaterThan(12);
     expect(
       Object.fromEntries(kept.map((k) => [k, after()[k as keyof GameState]])),
     ).toEqual(
-      Object.fromEntries(kept.map((k) => [k, out[k as keyof GameState]])),
+      Object.fromEntries(kept.map((k) => [k, out()[k as keyof GameState]])),
     );
   });
 
   it('keeps the words, their ranks and their FSRS memory', () => {
-    expect(after().words).toEqual(out.words);
+    expect(after().words).toEqual(out().words);
     expect(Object.keys(after().words)).toHaveLength(goalWords(2));
   });
 
@@ -415,19 +418,22 @@ describe('a sail resets only Encounters and Understanding (AC3, DN3)', () => {
 
   it('keeps the cards, upgrades and Insight', () => {
     expect(after().cards).toEqual(['c0']);
-    expect(after().upgrades).toEqual(out.upgrades);
+    expect(after().upgrades).toEqual(out().upgrades);
     expect(after().insight).toEqual(tuple(12));
   });
 
   it('owns no Encounters and holds only the starting grant, with nothing spent', () => {
     expect(after().owned).toEqual({});
-    expect(after().anchor).toEqual({ sim: out.sim, understanding: tuple(200) });
+    expect(after().anchor).toEqual({
+      sim: out().sim,
+      understanding: tuple(200),
+    });
     expect(after().runSpent).toEqual([0, 0]);
   });
 
   it('keeps a Journey still out', () => {
-    expect(out.journeys[0]).not.toBeNull();
-    expect(after().journeys).toEqual(out.journeys);
+    expect(out().journeys[0]).not.toBeNull();
+    expect(after().journeys).toEqual(out().journeys);
   });
 
   it('a Journey out across a sail into the next region brings back the card it drew', () => {

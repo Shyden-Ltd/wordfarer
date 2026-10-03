@@ -40,13 +40,23 @@ declare const process: {
   };
 };
 
-const course = syntheticCourse(1);
+let builtCourse: CourseData | undefined;
+
+/**
+ * The synthetic course, built on first use inside a test and kept, so every
+ * test reads the same object (the bucket memo is keyed by it) and a throwing
+ * build fails each test that needs it by name, never the file (#97).
+ */
+function course(): CourseData {
+  builtCourse ??= syntheticCourse(1);
+  return builtCourse;
+}
 const START = wallMs(BOT_EPOCH_WALL_MS + 60 * DAY_MS);
 
 function heldWords(): Record<string, WordMemory> {
   const ids = [
-    ...(course.regions[0]?.destinations ?? []),
-    course.regions[1]?.destinations[0],
+    ...(course().regions[0]?.destinations ?? []),
+    course().regions[1]?.destinations[0],
   ].flatMap((d) => d?.lexicon.map((item) => item.id) ?? []);
   return Object.fromEntries(
     ids.map((id, k) => {
@@ -91,7 +101,7 @@ function returning(): GameState {
     destination: 4,
     reached: 4,
   };
-  const on = setAutomation(course, parked, true, 1_000);
+  const on = setAutomation(course(), parked, true, 1_000);
   if (!on.ok) throw new Error(`refused: ${JSON.stringify(on.rejection)}`);
   return on.state;
 }
@@ -106,7 +116,7 @@ describe('a 72 h return with Pemandu at 1 s (AC5)', () => {
     const wallStart = performance.now();
     const cpuStart = process.cpuUsage();
     const { state, summary } = advance(
-      course,
+      course(),
       s,
       wallMs(s.wall + 72 * HOUR_MS),
     );
@@ -132,14 +142,19 @@ describe('a 72 h return with Pemandu at 1 s (AC5)', () => {
  * the breakdown a cold memo gives.
  */
 describe('the bucket memo behind a fast return', () => {
-  const node = course.regions[0]?.grammarNodes[0]?.id ?? '';
-  const other = syntheticCourse(2);
+  const node = (): string => course().regions[0]?.grammarNodes[0]?.id ?? '';
+  let builtOther: CourseData | undefined;
+  /** A second course with the same word ids, built on first use like course(). */
+  function other(): CourseData {
+    builtOther ??= syntheticCourse(2);
+    return builtOther;
+  }
   // Each change is a function of the state, so no core code runs while the
   // file is collected: a core change that throws then fails these tests by
   // name rather than dropping them from the count.
   type Change = (s: GameState) => Partial<GameState>;
 
-  it.each<readonly [string, CourseData, Change, number]>([
+  it.each<readonly [string, () => CourseData, Change, number]>([
     [
       'memorySince moves, as a review moves it',
       course,
@@ -152,17 +167,18 @@ describe('the bucket memo behind a fast return', () => {
       (s) => ({ wall: wallMs(s.wall + DAY_MS) }),
       0,
     ],
-    ['a grammar node is owned', course, () => ({ grammar: [node] }), 0],
+    ['a grammar node is owned', course, () => ({ grammar: [node()] }), 0],
     ['the next hour', course, () => ({}), HOUR_MS],
     ['another course with the same word ids', other, () => ({}), 0],
-  ])('%s', (_label, c, change, later) => {
+  ])('%s', (_label, courseOf, change, later) => {
+    const c = courseOf();
     const s0 = returning();
     const t0 = simMs(s0.sim + 1_234);
     const t = simMs(t0 + later);
-    rateBreakdown(course, s0, t0);
+    rateBreakdown(course(), s0, t0);
     const s1: GameState = { ...s0, ...change(s0) };
     const cold = rateBreakdown(c, { ...s1, words: { ...s1.words } }, t);
     expect(rateBreakdown(c, s1, t)).toEqual(cold);
-    expect(cold).not.toEqual(rateBreakdown(course, s0, t0));
+    expect(cold).not.toEqual(rateBreakdown(course(), s0, t0));
   });
 });

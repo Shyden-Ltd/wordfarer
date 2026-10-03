@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { scanTests, type LoopedCase, type TestScan } from './one-test-per-case';
+import { minus } from './burn-down';
 import { trackedFiles } from './tracked-files';
 
 /**
@@ -382,17 +383,6 @@ const scan = () => {
       .filter(({ scan }) => scan.tests < 1)
       .map(({ file }) => file),
   };
-};
-
-/** `from` minus `taken`, one occurrence per match, so two identical sites need two entries. */
-const minus = (from: readonly string[], taken: readonly string[]): string[] => {
-  const left = [...taken];
-  return from.filter((item) => {
-    const at = left.indexOf(item);
-    if (at === -1) return true;
-    left.splice(at, 1);
-    return false;
-  });
 };
 
 describe('the suite', () => {

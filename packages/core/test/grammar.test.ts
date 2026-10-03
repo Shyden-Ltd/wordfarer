@@ -280,22 +280,16 @@ describe('buyGrammarNode (#32 AC1)', () => {
     });
   });
 
-  it.each<[string, GameState, string, Rejection['kind']]>([
-    [
-      'owned before locked',
-      stateAt(3, 0, ['ber-']),
-      'ber-',
-      'grammarNodeOwned',
-    ],
-    [
-      'owned before unaffordable',
-      stateAt(4, 0, ['ber-']),
-      'ber-',
-      'grammarNodeOwned',
-    ],
-    ['locked before unaffordable', stateAt(3, 0), 'me-', 'grammarNodeLocked'],
-  ])('checks %s', (_, s, id, kind) => {
-    expect(rejected(buyGrammarNode(course, s, id)).kind).toBe(kind);
+  // Each row names its state's destination and grammar; the test builds it,
+  // so a throwing setup fails that test by name, never the file (#97).
+  it.each<[string, number, readonly string[], string, Rejection['kind']]>([
+    ['owned before locked', 3, ['ber-'], 'ber-', 'grammarNodeOwned'],
+    ['owned before unaffordable', 4, ['ber-'], 'ber-', 'grammarNodeOwned'],
+    ['locked before unaffordable', 3, [], 'me-', 'grammarNodeLocked'],
+  ])('checks %s', (_, at, grammar, id, kind) => {
+    expect(
+      rejected(buyGrammarNode(course, stateAt(at, 0, grammar), id)).kind,
+    ).toBe(kind);
   });
 });
 
