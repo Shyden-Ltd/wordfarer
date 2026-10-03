@@ -713,9 +713,6 @@ const BURN_DOWN: readonly string[] = [
   'packages/core/test/automation.test.ts :: rateGain (AC2) :: review -> review (../src/memory)',
   'packages/core/test/automation.test.ts :: rateGain (AC2) :: newWordMemory -> newWordMemory (../src/memory)',
   'packages/core/test/automation.test.ts :: rateGain (AC2) :: at -> at -> initialState (../src/state)',
-  'packages/core/test/grammar.test.ts :: buyGrammarNode (#32 AC1) :: stateAt -> stateAt -> initialState (../src/state)',
-  'packages/core/test/grammar.test.ts :: buyGrammarNode (#32 AC1) :: stateAt -> stateAt -> initialState (../src/state)',
-  'packages/core/test/grammar.test.ts :: buyGrammarNode (#32 AC1) :: stateAt -> stateAt -> initialState (../src/state)',
   'packages/core/test/pemandu-perf.test.ts :: (module) :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
   'packages/core/test/pemandu-perf.test.ts :: the bucket memo behind a fast return :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
   'packages/core/test/sail.test.ts :: the preview (AC2, DN3) :: at -> at -> initialState (../src/state)',
@@ -774,8 +771,8 @@ describe('the suite', () => {
   });
 
   it('judges the calls they evaluate at collection, counted as calls', () => {
-    // Measured 288 at T2's head (#97). Lower it only in the commit that moves calls out of collection.
-    expect(scan().judged).toBeGreaterThan(287);
+    // Measured 285 after #97 moved grammar.test.ts's table states into its tests. Lower it only in the commit that moves calls out of collection.
+    expect(scan().judged).toBeGreaterThan(284);
   });
 
   it('reads a describe callback in every file whose text holds a describe call', () => {
