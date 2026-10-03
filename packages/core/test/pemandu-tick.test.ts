@@ -409,14 +409,14 @@ describe('nextPurchaseTick (AC3)', () => {
     ['on the 5 s grid, at 15 s', 0, 5_000, at(15)],
     ['on the 1 s grid, at the first whole second past 11.5', 0, 1_000, at(12)],
   ] as const)('buys %s', (_label, held, intervalMs, want) => {
-    expect(nextPurchaseTick(course, state(held, intervalMs), at(60)).tick).toBe(
-      want,
-    );
+    expect(
+      nextPurchaseTick(course, state(held, intervalMs), at(60)).next?.tick,
+    ).toBe(want);
   });
 
   it('includes the tick at `until` and nothing past it', () => {
-    expect(nextPurchaseTick(course, state(0), at(20)).tick).toBe(at(20));
-    expect(nextPurchaseTick(course, state(0), at(19)).tick).toBeUndefined();
+    expect(nextPurchaseTick(course, state(0), at(20)).next?.tick).toBe(at(20));
+    expect(nextPurchaseTick(course, state(0), at(19)).next).toBeUndefined();
   });
 
   it('finds nothing when nothing is owned and nothing affordable, testing one tick per hour', () => {
@@ -424,7 +424,7 @@ describe('nextPurchaseTick (AC3)', () => {
     // segments, 3 h to 8 h and the instant at 8 h, tests only its last tick.
     const idle = { ...state(5), owned: {} };
     expect(nextPurchaseTick(course, idle, at(3600 * 5))).toStrictEqual({
-      tick: undefined,
+      next: undefined,
       checks: 6,
     });
   });
@@ -439,7 +439,7 @@ describe('nextPurchaseTick (AC3)', () => {
       anchor: { sim: idle.anchor.sim, understanding: Num.toTuple(price) },
     };
     expect(nextPurchaseTick(course, exact, at(60))).toStrictEqual({
-      tick: at(10),
+      next: { tick: at(10), understanding: price },
       checks: 1,
     });
   });
@@ -457,7 +457,7 @@ describe('nextPurchaseTick (AC3)', () => {
       regions: course.regions.map((r) => ({ ...r, encounters: [] })),
     };
     expect(nextPurchaseTick(bare, state(1e9), at(60))).toStrictEqual({
-      tick: undefined,
+      next: undefined,
       checks: 0,
     });
   });
@@ -475,18 +475,23 @@ describe('nextPurchaseTick (AC3)', () => {
       fc.assert(
         fc.property(arbCase, ({ course: c, state: s, until }) => {
           const got = nextPurchaseTick(c, s, until);
-          expect(got.tick).toBe(scan(c, s, until));
+          const tick = got.next?.tick;
+          expect(tick).toBe(scan(c, s, until));
           const anchor = s.anchor.sim;
           const every = s.automation.intervalMs;
           const walked = [...segments(c, s, anchor, simMs(until + 1))];
           // One test per segment that holds no purchase, and two, that tick
           // and the one before, in the segment that does (AC3).
           expect(got.checks).toBeLessThanOrEqual(walked.length + 1);
-          const { tick } = got;
           if (tick === undefined) {
             seen.none += 1;
             return;
           }
+          // The Understanding returned is the bits `understandingNow` gives
+          // at the tick, which a purchase there anchors with.
+          expect(got.next?.understanding).toEqual(
+            understandingNow(c, positioned(s, tick)),
+          );
           const k = walked.findIndex((g) => g.start <= tick && tick < g.end);
           const segment = walked[k];
           if (segment === undefined)

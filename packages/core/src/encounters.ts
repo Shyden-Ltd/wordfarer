@@ -31,6 +31,15 @@ function checkCount(count: number): void {
   }
 }
 
+/**
+ * Each Encounter's costs, by count owned and count bought. A cost is a pure
+ * function of `c0` and the two counts, and Pemandu prices every Encounter
+ * of the regions reached at every purchase (#33), so each is worked out
+ * once. A course is never mutated, so an Encounter object stands for its
+ * `c0`, as a course does for `lexiconItem`'s index.
+ */
+const costMemo = new WeakMap<Encounter, Map<string, Num>>();
+
 /** The cost of buying `count` more of `encounter` when `owned` are held. */
 export function purchaseCost(
   encounter: Encounter,
@@ -39,9 +48,23 @@ export function purchaseCost(
 ): Num {
   checkOwned(owned);
   checkCount(count);
-  const first = Num.mul(Num.from(encounter.c0), Num.pow(GROWTH, owned));
-  const series = Num.div(Num.sub(Num.pow(GROWTH, count), ONE), GROWTH_LESS_ONE);
-  return Num.mul(first, series);
+  let costs = costMemo.get(encounter);
+  if (costs === undefined) {
+    costs = new Map();
+    costMemo.set(encounter, costs);
+  }
+  const key = `${String(owned)}:${String(count)}`;
+  let cost = costs.get(key);
+  if (cost === undefined) {
+    const first = Num.mul(Num.from(encounter.c0), Num.pow(GROWTH, owned));
+    const series = Num.div(
+      Num.sub(Num.pow(GROWTH, count), ONE),
+      GROWTH_LESS_ONE,
+    );
+    cost = Num.mul(first, series);
+    costs.set(key, cost);
+  }
+  return cost;
 }
 
 /**
@@ -57,9 +80,18 @@ export function milestonesReached(owned: number): number {
   return listed + Math.floor((owned - last) / milestoneEvery);
 }
 
+/** 2^milestones by milestones reached: a pure function of the count, worked out once (#33). */
+const milestoneMemo = new Map<number, Num>();
+
 /** The output multiplier from the milestones `owned` has reached: 2^milestones. */
 export function milestoneFactor(owned: number): Num {
-  return Num.pow(MILESTONE_MULTIPLIER, milestonesReached(owned));
+  const reached = milestonesReached(owned);
+  let factor = milestoneMemo.get(reached);
+  if (factor === undefined) {
+    factor = Num.pow(MILESTONE_MULTIPLIER, reached);
+    milestoneMemo.set(reached, factor);
+  }
+  return factor;
 }
 
 /** Understanding per second from `owned` of `encounter`: p0 x owned x 2^milestones. */

@@ -14,10 +14,11 @@ import {
   automationUnlocked,
   bestPayback,
   nextPurchaseTick,
+  type PurchaseTick,
 } from './automation';
 import { BALANCE } from './balance';
 import { heldCards } from './cards';
-import { simMs, wallMs, type SimMs, type WallMs } from './clock';
+import { simMs, wallMs, type WallMs } from './clock';
 import type { CourseData, Encounter } from './course';
 import { findGrammarNode, grammarNodeCost, ownedGrammarNodes } from './grammar';
 import {
@@ -190,32 +191,36 @@ export function integrate(
 ): GameState {
   const elapsed = simMs(elapsedMs);
   const until = simMs(state.sim + elapsed);
-  let next = state;
+  let current = state;
   if (state.automation.enabled) {
-    let { tick } = nextPurchaseTick(course, next, until);
-    while (tick !== undefined) {
-      next = pemanduBuys(course, next, tick);
-      ({ tick } = nextPurchaseTick(course, next, until));
+    let found = nextPurchaseTick(course, current, until).next;
+    while (found !== undefined) {
+      current = pemanduBuys(course, current, found);
+      found = nextPurchaseTick(course, current, until).next;
     }
   }
-  return { ...next, sim: until, wall: wallMs(state.wall + elapsed) };
+  return { ...current, sim: until, wall: wallMs(state.wall + elapsed) };
 }
 
 /**
- * One Pemandu tick: the state moved to `tick`, the skew between its clocks
- * kept, buys one unit of the best payback there, exactly as a purchase by
- * hand would. `nextPurchaseTick` found a unit affordable at `tick`, so a
- * refusal here means the two disagree, and that is thrown, never skipped.
+ * One Pemandu tick: the state moved to the tick, the skew between its
+ * clocks kept, buys one unit of the best payback there, exactly as a
+ * purchase by hand would. It is anchored at the tick first with the
+ * Understanding `nextPurchaseTick` tested there, the bits `reanchor` would
+ * store, so the purchase's own re-anchor walks nothing. That a unit is
+ * affordable there is `nextPurchaseTick`'s finding, so a refusal means the
+ * two disagree, and that is thrown, never skipped.
  */
 function pemanduBuys(
   course: CourseData,
   state: GameState,
-  tick: SimMs,
+  { tick, understanding }: PurchaseTick,
 ): GameState {
-  const at = {
+  const at: GameState = {
     ...state,
     sim: tick,
     wall: wallMs(state.wall + tick - state.sim),
+    anchor: { sim: tick, understanding: Num.toTuple(understanding) },
   };
   const id = bestPayback(course, at);
   const bought = id === undefined ? undefined : buyEncounter(course, at, id, 1);

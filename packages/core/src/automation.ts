@@ -138,6 +138,12 @@ export function firstHolding(
   return { tick: tick <= last ? tick : undefined, checks };
 }
 
+/** A tick Pemandu buys at, and the Understanding held there. */
+export interface PurchaseTick {
+  readonly tick: SimMs;
+  readonly understanding: Num;
+}
+
 /**
  * Pemandu's next purchase: the first tick of its grid in `(anchor, until]`
  * at which Understanding pays for the cheapest unit of the regions reached
@@ -146,12 +152,14 @@ export function firstHolding(
  * tick is the bits `understandingNow` gives there. In each segment the rate
  * is constant, so the tick is solved from it and confirmed by
  * `firstHolding`; the answer never depends on how far `until` reaches.
+ * The Understanding returned with the tick is the one tested there, so a
+ * purchase can anchor at the tick without walking the segments again.
  */
 export function nextPurchaseTick(
   course: CourseData,
   state: GameState,
   until: SimMs,
-): { readonly tick: SimMs | undefined; readonly checks: number } {
+): { readonly next: PurchaseTick | undefined; readonly checks: number } {
   const prices = course.regions
     .slice(0, regionsReached(course, state))
     .flatMap((region) => region.encounters)
@@ -160,7 +168,7 @@ export function nextPurchaseTick(
     (low, p) => (low === undefined || Num.cmp(p, low) < 0 ? p : low),
     undefined,
   );
-  if (cheapest === undefined) return { tick: undefined, checks: 0 };
+  if (cheapest === undefined) return { next: undefined, checks: 0 };
   const every = state.automation.intervalMs;
   const from = state.anchor.sim;
   const anchor = Num.fromTuple(state.anchor.understanding);
@@ -197,8 +205,11 @@ export function nextPurchaseTick(
       (tick) => Num.cmp(cheapest, at(tick)) <= 0,
     );
     checks += found.checks;
-    if (found.tick !== undefined) return { tick: simMs(found.tick), checks };
+    if (found.tick !== undefined) {
+      const tick = simMs(found.tick);
+      return { next: { tick, understanding: at(tick) }, checks };
+    }
     total = Num.add(total, Num.mul(rate, Num.from(end - start)));
   }
-  return { tick: undefined, checks };
+  return { next: undefined, checks };
 }

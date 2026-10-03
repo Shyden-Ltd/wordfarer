@@ -87,6 +87,9 @@ function json(state: GameState): string {
 // buckets); 837 to 1371 ms alone and up to 6896 ms loaded (#72).
 // Both properties are correctness, so a 5 s timeout would guard only the load.
 const PROPERTY_TIMEOUT_MS = 60_000;
+// AC6 with Pemandu buying replays every purchase three times over: 7.3 s
+// beside one other file (#33), so 60 s would leave under 9x for load.
+const PEMANDU_TIMEOUT_MS = 120_000;
 
 function relativeError(got: Num, want: Num): number {
   return Math.abs(Num.toNumber(Num.div(Num.sub(got, want), want)));
@@ -306,7 +309,7 @@ describe('integrate (AC6)', () => {
 
   it(
     'integrate(integrate(s, a), b) deep-equals integrate(s, a + b) with Pemandu buying (#33 AC4)',
-    { timeout: PROPERTY_TIMEOUT_MS },
+    { timeout: PEMANDU_TIMEOUT_MS },
     () => {
       const gap = fc.integer({ min: 0, max: 72 * HOUR_MS });
       const pemandu = fc

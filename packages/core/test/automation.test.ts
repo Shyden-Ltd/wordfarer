@@ -486,6 +486,7 @@ describe('integrate with Pemandu (AC2)', () => {
 
   it(
     'equals buying tick by tick with bestPayback and buyEncounter, over generated states',
+    // 3.3 s beside one other file (#33); the timeout guards only a hang.
     { timeout: 120_000 },
     () => {
       let bought = 0;
