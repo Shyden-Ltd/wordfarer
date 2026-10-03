@@ -704,15 +704,13 @@ suite();`).unclassified,
 
 /**
  * Every call that reached workspace code at collection on the day #97's guard
- * landed (12, in four files). `file :: scope :: call -> reaches`. The guard
- * fails on a site missing from this list AND on an entry that no longer
- * matches a site. Never add an entry: compute the value inside the test, or
- * in a hook.
+ * landed (12, in four files), converted by #97 and empty since.
+ * `file :: scope :: call -> reaches`. The guard fails on a site missing from
+ * this list AND on an entry that no longer matches a site. Never add an
+ * entry: compute the value inside the test, or in a `beforeEach` (a throwing
+ * `beforeAll` skips its tests instead of failing them).
  */
-const BURN_DOWN: readonly string[] = [
-  'packages/core/test/pemandu-perf.test.ts :: (module) :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
-  'packages/core/test/pemandu-perf.test.ts :: the bucket memo behind a fast return :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
-];
+const BURN_DOWN: readonly string[] = [];
 
 const TEST_FILE = /\.(test|spec)\.ts$/;
 
@@ -764,8 +762,8 @@ describe('the suite', () => {
   });
 
   it('judges the calls they evaluate at collection, counted as calls', () => {
-    // Measured 272 after #97 moved automation.test.ts's rateGain state into its test. Lower it only in the commit that moves calls out of collection.
-    expect(scan().judged).toBeGreaterThan(271);
+    // Measured 270 at #97's head, its last site converted. Lower it only in the commit that moves calls out of collection.
+    expect(scan().judged).toBeGreaterThan(269);
   });
 
   it('reads a describe callback in every file whose text holds a describe call', () => {
