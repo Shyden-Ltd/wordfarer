@@ -111,7 +111,7 @@ Seconds (Understanding) · minutes to hours (Journeys, early reviews) · days (l
 
 - Timed outings of 30 min (tutorial), 2 h, 4 h, 8 h or 24 h. One slot to start; upgradable to 3.
 - A Journey returns a **culture card** (festival, food, custom, place or motif): a short fact plus a phrase pack (new pickable words) and a permanent tagged bonus.
-- Cards come from the current region's pool in a **seeded order with no duplicates until the set is complete**, so there is no gacha feel. Completing a set (e.g. all five Javanese foods) grants a set bonus.
+- Cards come from the current region's pool, one **drawn uniformly from a seeded stream** when a Journey starts, so a held card can return again; a repeat pays Insight and Understanding instead (operator, 2026-10-03, #30: _"duplicates of cards is ok throughout. so that insights are being delivered and it's more gacha-style"_; this replaced "no duplicates until the set is complete"). Nothing is paid for: a draw costs only a Journey's time. Completing a set (e.g. all five Javanese foods) grants a set bonus.
 - **Seasonal festivals:** real-calendar festivals (Lebaran, Nyepi, Imlek, 17 Agustus; for `id-en`: Bonfire Night, Thanksgiving, Anzac Day) have an _in-season_ bonus while live, but their cards are always obtainable (DN15).
 
 ### 4.3 Grammar tree
