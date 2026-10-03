@@ -7,18 +7,24 @@ import type {
   LexiconItem,
   Region,
 } from '../src/course';
-import { grammarNodeCost, rootFactors } from '../src/grammar';
+import {
+  grammarNodeCost,
+  ownedGrammarNodes,
+  rootFactors,
+} from '../src/grammar';
 import { newWordMemory } from '../src/memory';
 import { Num, type NumTuple } from '../src/num';
 import { rateBreakdown, understandingNow } from '../src/production';
 import {
   buyGrammarNode,
   integrate,
+  pickUpWord,
   view,
   type Rejection,
   type Result,
 } from '../src/sim';
 import { initialState, type GameState } from '../src/state';
+import { lexiconItem, pickUpPool } from '../src/words';
 
 /**
  * Grammar nodes (#32 AC1 to AC4): buying one, the words it multiplies, the
@@ -404,5 +410,114 @@ describe('the grammar breakdown line (#32 AC4, DN6)', () => {
       (e) => e.id === 'food0',
     );
     expect(food?.lines.map((l) => l.name)).toContain('grammar');
+  });
+});
+
+/** Region 2's first destination's lexicon: three A1 filler words. */
+const REGION_2_LEXICON = ['r1-d0-w0', 'r1-d0-w1', 'r1-d0-w2'];
+
+/** At region 2's first destination with its lexicon held, owning `grammar`. */
+function lexiconDone(grammar: readonly string[]): GameState {
+  const s = stateAt(4, 0, grammar);
+  return {
+    ...s,
+    words: Object.fromEntries(
+      REGION_2_LEXICON.map((id) => [id, newWordMemory(START)]),
+    ),
+  };
+}
+
+function poolIds(s: GameState): string[] {
+  return pickUpPool(
+    course.regions[1]?.destinations[0],
+    [],
+    ownedGrammarNodes(course, s),
+  ).map((w) => w.id);
+}
+
+describe('derived words (#32 AC3)', () => {
+  it('lists the owned nodes in course order, not the order bought', () => {
+    expect(
+      ownedGrammarNodes(course, stateAt(4, 0, ['di-', 'me-', 'ber-'])).map(
+        (n) => n.id,
+      ),
+    ).toEqual(['ber-', 'me-', 'di-']);
+  });
+
+  it("adds the owned nodes' derived words to the pool, in curriculum order", () => {
+    // Bought di- first, but A1 lists me-'s mengajar before di-'s dimakan,
+    // in course order; then A2 belajar, then B1 memakan.
+    expect(poolIds(stateAt(4, 0, ['di-', 'me-', 'ber-']))).toEqual([
+      ...REGION_2_LEXICON,
+      'mengajar',
+      'dimakan',
+      'belajar',
+      'memakan',
+    ]);
+  });
+
+  it('adds no derived word without a node', () => {
+    expect(poolIds(stateAt(4, 0))).toEqual(REGION_2_LEXICON);
+  });
+
+  it('puts derived words after the card packs at one CEFR level', () => {
+    const pack = { id: 'pack-a1', tags: ['food'], cefr: 'A1' as const };
+    const pool = pickUpPool(
+      course.regions[1]?.destinations[0],
+      [
+        {
+          id: 'card',
+          setId: 'set',
+          tags: ['food'],
+          bonus: 0.05,
+          phrasePack: [pack],
+        },
+      ],
+      ownedGrammarNodes(course, stateAt(4, 0, ['di-'])),
+    );
+    expect(pool.map((w) => w.id)).toEqual([
+      ...REGION_2_LEXICON,
+      'pack-a1',
+      'dimakan',
+    ]);
+  });
+
+  it('picks up a derived word once the lexicon is held', () => {
+    const out = ok(pickUpWord(course, lexiconDone(['ber-'])));
+    expect(Object.keys(out.words)).toEqual([...REGION_2_LEXICON, 'belajar']);
+  });
+
+  it('finds the pool empty with the lexicon held and no node owned', () => {
+    expect(rejected(pickUpWord(course, lexiconDone([])))).toEqual({
+      kind: 'poolEmpty',
+    });
+  });
+
+  it("prices a derived word by the pool's words held: the fourth costs 20 x 1.15^3", () => {
+    const s = lexiconDone(['ber-']);
+    const out = ok(pickUpWord(course, s));
+    const paid =
+      Num.toNumber(understandingNow(course, s)) -
+      Num.toNumber(Num.fromTuple(out.anchor.understanding));
+    expect(paid).toBeCloseTo(20 * 1.15 ** 3, 9);
+  });
+
+  it('knows a derived word as a lexicon item', () => {
+    expect(lexiconItem(course, 'dimakan')).toEqual({
+      id: 'dimakan',
+      tags: ['travel'],
+      cefr: 'A1',
+      root: 'makan',
+    });
+  });
+
+  it('pays a held derived word on its tags, multiplied by its node', () => {
+    // dimakan alone on travel, root makan, with di- owned: 1 + 0.01 x 1.5.
+    const s = {
+      ...stateAt(4, 0, ['di-']),
+      words: { dimakan: newWordMemory(START) },
+    };
+    expect(line(s, 'travel0', 'words')).toBeCloseTo(1.01, 12);
+    expect(line(s, 'travel0', 'grammar')).toBeCloseTo(1.015 / 1.01, 12);
   });
 });

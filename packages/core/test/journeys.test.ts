@@ -486,6 +486,7 @@ const poolIds = (state: GameState): string[] =>
   pickUpPool(
     currentDestination(packCourse, state),
     heldCards(packCourse, state),
+    [],
   ).map((w) => w.id);
 
 describe('phrase packs (AC4)', () => {

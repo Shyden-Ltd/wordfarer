@@ -13,6 +13,7 @@ describe('the package entry point', () => {
     'buyGrammarNode',
     'findGrammarNode',
     'grammarNodeCost',
+    'ownedGrammarNodes',
     'answerReview',
     'answerPractice',
     'pickUpCost',

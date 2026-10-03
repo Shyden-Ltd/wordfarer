@@ -175,7 +175,7 @@ describe('the pools follow the current destination', () => {
   it("the pick-up pool is destination 5's lexicon, then the held packs", () => {
     const s = { ...at(5, 5), cards: ['c0'] };
     expect(
-      pickUpPool(currentDestination(course, s), [card(0)]).map((w) => w.id),
+      pickUpPool(currentDestination(course, s), [card(0)], []).map((w) => w.id),
     ).toEqual(['r1d1w0', 'r1d1w1', 'r1d1w2', 'c0p']);
   });
 

@@ -84,7 +84,7 @@ export {
   type QueueItem,
   type WordMemory,
 } from './memory';
-export { findGrammarNode, grammarNodeCost } from './grammar';
+export { findGrammarNode, grammarNodeCost, ownedGrammarNodes } from './grammar';
 export { pickUpCost, pickUpPool } from './words';
 export {
   currentDestination,

@@ -15,7 +15,7 @@ import { heldCards } from './cards';
 import { simMs, wallMs, type WallMs } from './clock';
 import type { CourseData, Encounter } from './course';
 import { purchaseCost } from './encounters';
-import { findGrammarNode, grammarNodeCost } from './grammar';
+import { findGrammarNode, grammarNodeCost, ownedGrammarNodes } from './grammar';
 import {
   insightFor,
   isDue,
@@ -319,8 +319,9 @@ function spent(state: GameState, cost: Num): NumTuple {
 
 /**
  * Pick up the next word of the pick-up pool in curriculum order, paying for
- * it from Understanding (parent §3.3): the current destination's lexicon and
- * the held cards' phrase packs (#30). The cost counts towards this run's
+ * it from Understanding (parent §3.3): the current destination's lexicon, the
+ * held cards' phrase packs (#30) and the owned grammar nodes' derived words
+ * (#32). The cost counts towards this run's
  * spend. The first word ever picked up is the tutorial word: it falls due
  * `tutorialDueMs` later, when Review unfolds (parent §4.1); every other word
  * is due at once.
@@ -329,6 +330,7 @@ export function pickUpWord(course: CourseData, state: GameState): Result {
   const pool = pickUpPool(
     currentDestination(course, state),
     heldCards(course, state),
+    ownedGrammarNodes(course, state),
   );
   const next = pool.find((item) => pickedWord(state, item.id) === undefined);
   if (next === undefined) {
