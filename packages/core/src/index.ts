@@ -58,6 +58,7 @@ export {
   rateAt,
   rateBreakdown,
   totalRate,
+  understandingNow,
   wordMultiplier,
   type EncounterRate,
   type RateLine,
@@ -85,6 +86,25 @@ export {
 } from './memory';
 export { pickUpCost, pickUpPool } from './words';
 export {
+  currentDestination,
+  currentRegion,
+  regionsReached,
+  route,
+  type Stop,
+} from './route';
+export {
+  goalMet,
+  runUnderstanding,
+  sailGoal,
+  sailPreview,
+  setSail,
+  stampGain,
+  wordsHeld,
+  type SailGoal,
+  type SailPreview,
+} from './sail';
+export { UNFOLD_FLAGS, unfold, type Unfold, type UnfoldFlag } from './unfold';
+export {
   advance,
   answerPractice,
   answerReview,
@@ -93,7 +113,6 @@ export {
   integrate,
   listen,
   pickUpWord,
-  understandingNow,
   view,
   type AdvanceSummary,
   type Rejection,

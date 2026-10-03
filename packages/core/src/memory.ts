@@ -190,12 +190,15 @@ function toCard(card: MemoryCard): CardInput {
   };
 }
 
-/** A word just picked up at `wall`: Heard, a new card due at once. */
-export function newWordMemory(wall: WallMs): WordMemory {
+/**
+ * A word just picked up at `wall`: Heard, a new card due at `due`, at once
+ * unless told otherwise (the tutorial word waits, parent §4.1).
+ */
+export function newWordMemory(wall: WallMs, due: WallMs = wall): WordMemory {
   return {
     rank: 'heard',
     card: {
-      due: wall,
+      due,
       stability: 0,
       difficulty: 0,
       scheduledDays: 0,

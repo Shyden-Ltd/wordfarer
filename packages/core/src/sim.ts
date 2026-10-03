@@ -25,12 +25,15 @@ import {
 } from './memory';
 import { Num, type NumTuple } from './num';
 import {
-  producedBetween,
   rateBreakdown,
   totalRate,
+  understandingNow,
   type EncounterRate,
 } from './production';
+import { currentDestination, regionsReached } from './route';
+import { sailPreview, type SailPreview } from './sail';
 import { ownedCount, pickedWord, type GameState } from './state';
+import { unfold, type Unfold } from './unfold';
 import {
   encounterCostFactor,
   findUpgrade,
@@ -42,6 +45,11 @@ import { pickUpCost, pickUpPool } from './words';
 
 export type Rejection =
   | { readonly kind: 'unknownEncounter'; readonly id: string }
+  | {
+      readonly kind: 'encounterLocked';
+      readonly id: string;
+      readonly region: number;
+    }
   | { readonly kind: 'invalidCount'; readonly count: number }
   | {
       readonly kind: 'unaffordable';
@@ -84,6 +92,22 @@ export type Rejection =
       readonly kind: 'notReturned';
       readonly slot: number;
       readonly returnsAt: number;
+    }
+  | { readonly kind: 'noDestination' }
+  | { readonly kind: 'sailTargetRequired' }
+  | { readonly kind: 'sailTargetInvalid'; readonly to: string }
+  | {
+      readonly kind: 'regionNotPlayable';
+      readonly destination: string;
+      readonly region: number;
+      readonly playable: number;
+    }
+  | {
+      readonly kind: 'sailGoalUnmet';
+      readonly understanding: NumTuple;
+      readonly goal: NumTuple;
+      readonly words: number;
+      readonly wordsGoal: number;
     };
 
 export type Result =
@@ -109,14 +133,10 @@ export interface View {
   readonly insight: Num;
   /** At most 10 due items; how many more are due is never shown (DN23). */
   readonly queue: readonly QueueItem[];
-}
-
-/** Understanding at the state's simulated time: the anchor's, plus production since. */
-export function understandingNow(course: CourseData, state: GameState): Num {
-  return Num.add(
-    Num.fromTuple(state.anchor.understanding),
-    producedBetween(course, state, state.anchor.sim, state.sim),
-  );
+  /** The run's goal and exactly what Set Sail would reset, keep and pay (DN3, #31). */
+  readonly sail: SailPreview;
+  /** Which features have unfolded (parent §4.1, DN7, #31). */
+  readonly unfold: Unfold;
 }
 
 /** Move the anchor to the state's simulated time, holding the same values. */
@@ -188,6 +208,8 @@ export function view(course: CourseData, state: GameState, now: WallMs): View {
     breakdown,
     insight: Num.fromTuple(at.insight),
     queue: reviewQueue(at.words, at.wall),
+    sail: sailPreview(course, at),
+    unfold: unfold(course, at),
   };
 }
 
@@ -204,24 +226,35 @@ export function listen(course: CourseData, state: GameState): GameState {
   };
 }
 
-function findEncounter(course: CourseData, id: string): Encounter | undefined {
-  for (const region of course.regions) {
-    const found = region.encounters.find((e) => e.id === id);
-    if (found !== undefined) return found;
+function findEncounter(
+  course: CourseData,
+  id: string,
+): { readonly encounter: Encounter; readonly region: number } | undefined {
+  for (const [region, { encounters }] of course.regions.entries()) {
+    const encounter = encounters.find((e) => e.id === id);
+    if (encounter !== undefined) return { encounter, region };
   }
   return undefined;
 }
 
-/** Buy `count` of Encounter `id` at the state's simulated time. */
+/**
+ * Buy `count` of Encounter `id` at the state's simulated time. Encounters
+ * come from every region reached so far (operator, 2026-10-03); one from a
+ * later region is refused. The cost counts towards this run's spend.
+ */
 export function buyEncounter(
   course: CourseData,
   state: GameState,
   id: string,
   count: number,
 ): Result {
-  const encounter = findEncounter(course, id);
-  if (encounter === undefined) {
+  const found = findEncounter(course, id);
+  if (found === undefined) {
     return { ok: false, rejection: { kind: 'unknownEncounter', id } };
+  }
+  const { encounter, region } = found;
+  if (region >= regionsReached(course, state)) {
+    return { ok: false, rejection: { kind: 'encounterLocked', id, region } };
   }
   if (!Number.isSafeInteger(count) || count < 1) {
     return { ok: false, rejection: { kind: 'invalidCount', count } };
@@ -252,17 +285,36 @@ export function buyEncounter(
         understanding: Num.toTuple(Num.sub(understanding, cost)),
       },
       owned: { ...anchored.owned, [id]: owned + count },
+      runSpent: spent(anchored, cost),
     },
   };
+}
+
+/** When a word picked up now falls due: later for the tutorial word, else at once. */
+function tutorialDue(state: GameState): WallMs {
+  return Object.keys(state.words).length === 0
+    ? wallMs(state.wall + BALANCE.memory.tutorialDueMs)
+    : state.wall;
+}
+
+/** This run's spend after paying `cost`: it stays part of `U_run` (#31). */
+function spent(state: GameState, cost: Num): NumTuple {
+  return Num.toTuple(Num.add(Num.fromTuple(state.runSpent), cost));
 }
 
 /**
  * Pick up the next word of the pick-up pool in curriculum order, paying for
  * it from Understanding (parent §3.3): the current destination's lexicon and
- * the held cards' phrase packs (#30).
+ * the held cards' phrase packs (#30). The cost counts towards this run's
+ * spend. The first word ever picked up is the tutorial word: it falls due
+ * `tutorialDueMs` later, when Review unfolds (parent §4.1); every other word
+ * is due at once.
  */
 export function pickUpWord(course: CourseData, state: GameState): Result {
-  const pool = pickUpPool(course, heldCards(course, state));
+  const pool = pickUpPool(
+    currentDestination(course, state),
+    heldCards(course, state),
+  );
   const next = pool.find((item) => pickedWord(state, item.id) === undefined);
   if (next === undefined) {
     return { ok: false, rejection: { kind: 'poolEmpty' } };
@@ -291,7 +343,11 @@ export function pickUpWord(course: CourseData, state: GameState): Result {
         ...anchored.anchor,
         understanding: Num.toTuple(Num.sub(understanding, cost)),
       },
-      words: { ...anchored.words, [next.id]: newWordMemory(state.wall) },
+      words: {
+        ...anchored.words,
+        [next.id]: newWordMemory(state.wall, tutorialDue(state)),
+      },
+      runSpent: spent(anchored, cost),
     },
   };
 }

@@ -52,9 +52,10 @@ describe('BALANCE', () => {
         );
       }
     });
-    // Measured 84 with #30's two journey tables (74 at b2a6f3f, #82); raise
-    // it with BALANCE, lower it only when BALANCE shrinks.
-    expect(leaves.length).toBeGreaterThan(83);
+    // Measured 90 with #31's Set Sail table (84 with #30's journey tables,
+    // 74 at b2a6f3f, #82); raise it with BALANCE, lower it only when
+    // BALANCE shrinks.
+    expect(leaves.length).toBeGreaterThan(89);
   });
 
   it.each<[string, (b: Balance) => unknown, unknown]>([
@@ -196,6 +197,22 @@ describe('BALANCE', () => {
       'design §5 (#29): 100 starting Understanding per level',
       (b) => b.stamps.startingUnderstandingPerLevel,
       100,
+    ],
+    [
+      'design §5 (#31): U_goal(i) = 10,000 x 10^i',
+      (b) => [b.sail.goalU0, b.sail.goalGrowth],
+      [10_000, 10],
+    ],
+    [
+      'design §5 (#31): words(i) = 8 + 2i',
+      (b) => [b.sail.wordsBase, b.sail.wordsStep],
+      [8, 2],
+    ],
+    ['design §5 (#31): k = 3 stamps at the goal', (b) => b.sail.stampK, 3],
+    [
+      'parent §4.5 (#31): 3 playable regions by default',
+      (b) => b.sail.playableRegions,
+      3,
     ],
   ])('%s', (_source, read, expected) => {
     expect(read(BALANCE)).toEqual(expected);

@@ -22,7 +22,12 @@ import {
   type WordMemory,
 } from '../src/memory';
 import { Num } from '../src/num';
-import { producedBetween, rateAt, wordMultiplier } from '../src/production';
+import {
+  producedBetween,
+  rateAt,
+  understandingNow,
+  wordMultiplier,
+} from '../src/production';
 import {
   advance,
   answerPractice,
@@ -31,7 +36,6 @@ import {
   integrate,
   listen,
   pickUpWord,
-  understandingNow,
   view,
   type Result,
 } from '../src/sim';
@@ -129,11 +133,13 @@ function at(state: GameState, deltaMs: number): GameState {
 
 /**
  * A played game: all five words picked up, Encounters owned, the first
- * three words reviewed correctly at different times, then left alone.
+ * three words reviewed correctly at different times, then left alone. The
+ * first answer waits the 4 minutes until the tutorial word is due.
  */
 function played(): GameState {
   let s = rich(1e6, { tea: 3, bus: 2, stall: 1 });
   for (let k = 0; k < 5; k++) s = ok(pickUpWord(course, s));
+  s = at(s, 240_000);
   s = ok(answerReview(course, s, 'a1-food', true));
   s = at(s, 7 * HOUR_MS + 123_457);
   s = ok(answerReview(course, s, 'a1-bus', true));
@@ -236,9 +242,32 @@ describe('picking up a word (AC1)', () => {
       );
     });
 
-  it('adds the word Heard, a new card due at once', () => {
+  it('adds the first word Heard, a new card due 4 minutes later (parent §4.1)', () => {
     const s = ok(pickUpWord(course, rich(100)));
-    expect(s.words).toEqual({ 'a1-food': newWordMemory(START) });
+    expect(s.words['a1-food']?.card.due).toBe(START + 240_000);
+    expect(s.words).toEqual({
+      'a1-food': newWordMemory(START, wallMs(START + 240_000)),
+    });
+  });
+
+  it('the tutorial word is not due a millisecond before its 4 minutes', () => {
+    const s = at(ok(pickUpWord(course, rich(100))), 240_000 - 1);
+    expect(answerReview(course, s, 'a1-food', true)).toEqual({
+      ok: false,
+      rejection: { kind: 'notDue', itemId: 'a1-food', due: START + 240_000 },
+    });
+  });
+
+  it('the tutorial word is due at 4 minutes', () => {
+    const s = at(ok(pickUpWord(course, rich(100))), 240_000);
+    expect(ok(answerReview(course, s, 'a1-food', true)).insight).toEqual([
+      1, 0,
+    ]);
+  });
+
+  it('adds every later word Heard, a new card due at once', () => {
+    const s = ok(pickUpWord(course, ok(pickUpWord(course, rich(100)))));
+    expect(s.words['a1-bus']).toEqual(newWordMemory(START));
   });
 
   it('is refused when the pool is empty, never reaching a later destination', () => {
@@ -428,6 +457,7 @@ describe('the floor (AC4)', () => {
   function reviewedTeaAfter(days: number): number {
     let s = rich(1e6, { tea: 1 });
     s = ok(pickUpWord(course, s));
+    s = at(s, 240_000);
     s = ok(answerReview(course, s, 'a1-food', true));
     const later = integrate(s, Math.round(days * DAY_MS));
     return wordMultiplier(course, later, tea, later.sim);
@@ -510,6 +540,7 @@ describe('answering a review (AC5, AC7)', () => {
   it('refuses an item that is not due, leaving the state alone', () => {
     let s = rich(1e6);
     s = ok(pickUpWord(course, s));
+    s = at(s, 240_000);
     s = ok(answerReview(course, s, 'a1-food', true));
     const word = s.words['a1-food'];
     expect(word && word.card.due > s.wall).toBe(true);
@@ -578,14 +609,16 @@ describe('practice (AC8)', () => {
 });
 
 describe('the view (AC6, DN23)', () => {
-  it('holds Understanding, the rate and its breakdown (#29), Insight and the queue, and nothing else', () => {
+  it('holds Understanding, the rate and its breakdown (#29), Insight, the queue, the sail preview and the unfold flags (#31), and nothing else', () => {
     const v = view(course, played(), wallMs(START + 9 * DAY_MS));
     expect(Object.keys(v).sort()).toEqual([
       'breakdown',
       'insight',
       'queue',
       'rate',
+      'sail',
       'understanding',
+      'unfold',
     ]);
   });
 

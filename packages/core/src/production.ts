@@ -193,6 +193,14 @@ export function rateAt(course: CourseData, state: GameState, t: SimMs): Num {
   return totalRate(rateBreakdown(course, state, t));
 }
 
+/** Understanding at the state's simulated time: the anchor's, plus production since. */
+export function understandingNow(course: CourseData, state: GameState): Num {
+  return Num.add(
+    Num.fromTuple(state.anchor.understanding),
+    producedBetween(course, state, state.anchor.sim, state.sim),
+  );
+}
+
 /**
  * Understanding produced over `[from, to)`, bucket by bucket, each bucket
  * split at a held festival card's window edges.

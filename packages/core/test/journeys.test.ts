@@ -11,13 +11,13 @@ import type {
 } from '../src/course';
 import { collectJourney, journeyStatus, startJourney } from '../src/journeys';
 import { Num } from '../src/num';
-import { rateAt, rateBreakdown } from '../src/production';
+import { rateAt, rateBreakdown, understandingNow } from '../src/production';
 import { createStreams, nextInt, type RngState } from '../src/rng';
+import { currentDestination } from '../src/route';
 import {
   advance,
   integrate,
   pickUpWord,
-  understandingNow,
   type Rejection,
   type Result,
 } from '../src/sim';
@@ -483,7 +483,10 @@ const packCourse: CourseData = {
 };
 
 const poolIds = (state: GameState): string[] =>
-  pickUpPool(packCourse, heldCards(packCourse, state)).map((w) => w.id);
+  pickUpPool(
+    currentDestination(packCourse, state),
+    heldCards(packCourse, state),
+  ).map((w) => w.id);
 
 describe('phrase packs (AC4)', () => {
   it("adds a collected card's pack to the pick-up pool, in curriculum order", () => {
