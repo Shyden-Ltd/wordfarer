@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   cycles,
   importGraph,
+  type ImportGraph,
   rawRelativeImports,
   scanModule,
 } from './core-import-graph';
+import { trackedFiles } from './tracked-files';
 
 /**
  * packages/core/src keeps an acyclic graph of value imports (#92).
@@ -424,5 +427,54 @@ describe('cycles names each value-import cycle once', () => {
       'b.ts': "import { a } from './a';",
     });
     expect(cycles(graph.edges)).toEqual(['a.ts -> b.ts -> a.ts']);
+  });
+});
+
+describe('packages/core/src holds no value-import cycle', () => {
+  // Read inside each test, not in the describe body: a throw at collection
+  // time fails the file as "no tests" instead of naming the broken assertion.
+  const ROOT = 'packages/core/src/';
+  const corePaths = () =>
+    trackedFiles().filter((path) => path.startsWith(ROOT));
+  const coreGraph = () =>
+    importGraph(
+      new Map(
+        corePaths()
+          .filter((path) => path.endsWith('.ts'))
+          .map((path) => [path.slice(ROOT.length), readFileSync(path, 'utf8')]),
+      ),
+    );
+  const edgeCount = (graph: ImportGraph) =>
+    [...graph.edges.values()].reduce((n, targets) => n + targets.length, 0);
+
+  it('every file under packages/core/src is a .ts module the graph reads', () => {
+    expect(corePaths().filter((path) => !path.endsWith('.ts'))).toEqual([]);
+  });
+
+  it('reads every module (liveness)', () => {
+    // Measured 20 modules on develop d4b1f94's tree (#92). Lower it only in the commit that removes one.
+    expect(coreGraph().modules.length).toBeGreaterThan(19);
+  });
+
+  it('judges every relative import and export declaration (liveness)', () => {
+    // Measured 97 declarations on develop d4b1f94's tree (#92), type-only ones included.
+    expect(coreGraph().declarations).toBeGreaterThan(96);
+  });
+
+  it('draws an edge for every module a value is imported from (liveness)', () => {
+    // Measured 77 edges on develop d4b1f94's tree (#92): the population the cycle check judges.
+    expect(edgeCount(coreGraph())).toBeGreaterThan(76);
+  });
+
+  it('reads each module’s relative imports as its raw text counts them', () => {
+    expect(coreGraph().unread).toEqual([]);
+  });
+
+  it('refuses no import it cannot place in the graph', () => {
+    expect(coreGraph().refused).toEqual([]);
+  });
+
+  it('holds no value-import cycle', () => {
+    expect(cycles(coreGraph().edges)).toEqual([]);
   });
 });
