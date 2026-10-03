@@ -61,6 +61,8 @@ export interface SailPreview {
     readonly cards: number;
     /** Upgrade levels owned, added over every upgrade. */
     readonly upgradeLevels: number;
+    /** Grammar nodes owned (#32). */
+    readonly grammarNodes: number;
     /** Stamps held after the sail pays. */
     readonly stamps: number;
   };
@@ -250,6 +252,7 @@ export function sailPreview(course: CourseData, state: GameState): SailPreview {
       words: Object.keys(state.words).length,
       cards: state.cards.length,
       upgradeLevels: Object.values(state.upgrades).reduce((a, b) => a + b, 0),
+      grammarNodes: state.grammar.length,
       stamps: state.stamps + gain,
     },
   };
