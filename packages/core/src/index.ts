@@ -103,6 +103,7 @@ export {
   type SailGoal,
   type SailPreview,
 } from './sail';
+export { UNFOLD_FLAGS, unfold, type Unfold, type UnfoldFlag } from './unfold';
 export {
   advance,
   answerPractice,

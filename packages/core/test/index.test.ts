@@ -43,6 +43,7 @@ describe('the package entry point', () => {
     'stampGain',
     'wordsHeld',
     'understandingNow',
+    'unfold',
   ] as const)
     it(`exports ${name}`, () => {
       expect(core[name]).toBeTypeOf('function');

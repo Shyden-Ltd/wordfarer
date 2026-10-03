@@ -33,6 +33,7 @@ import {
 import { currentDestination, regionsReached } from './route';
 import { sailPreview, type SailPreview } from './sail';
 import { ownedCount, pickedWord, type GameState } from './state';
+import { unfold, type Unfold } from './unfold';
 import {
   encounterCostFactor,
   findUpgrade,
@@ -134,6 +135,8 @@ export interface View {
   readonly queue: readonly QueueItem[];
   /** The run's goal and exactly what Set Sail would reset, keep and pay (DN3, #31). */
   readonly sail: SailPreview;
+  /** Which features have unfolded (parent §4.1, DN7, #31). */
+  readonly unfold: Unfold;
 }
 
 /** Move the anchor to the state's simulated time, holding the same values. */
@@ -206,6 +209,7 @@ export function view(course: CourseData, state: GameState, now: WallMs): View {
     insight: Num.fromTuple(at.insight),
     queue: reviewQueue(at.words, at.wall),
     sail: sailPreview(course, at),
+    unfold: unfold(course, at),
   };
 }
 
