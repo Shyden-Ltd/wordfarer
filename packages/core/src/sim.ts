@@ -286,6 +286,13 @@ export function buyEncounter(
   };
 }
 
+/** When a word picked up now falls due: later for the tutorial word, else at once. */
+function tutorialDue(state: GameState): WallMs {
+  return Object.keys(state.words).length === 0
+    ? wallMs(state.wall + BALANCE.memory.tutorialDueMs)
+    : state.wall;
+}
+
 /** This run's spend after paying `cost`: it stays part of `U_run` (#31). */
 function spent(state: GameState, cost: Num): NumTuple {
   return Num.toTuple(Num.add(Num.fromTuple(state.runSpent), cost));
@@ -295,7 +302,9 @@ function spent(state: GameState, cost: Num): NumTuple {
  * Pick up the next word of the pick-up pool in curriculum order, paying for
  * it from Understanding (parent §3.3): the current destination's lexicon and
  * the held cards' phrase packs (#30). The cost counts towards this run's
- * spend.
+ * spend. The first word ever picked up is the tutorial word: it falls due
+ * `tutorialDueMs` later, when Review unfolds (parent §4.1); every other word
+ * is due at once.
  */
 export function pickUpWord(course: CourseData, state: GameState): Result {
   const pool = pickUpPool(
@@ -330,7 +339,10 @@ export function pickUpWord(course: CourseData, state: GameState): Result {
         ...anchored.anchor,
         understanding: Num.toTuple(Num.sub(understanding, cost)),
       },
-      words: { ...anchored.words, [next.id]: newWordMemory(state.wall) },
+      words: {
+        ...anchored.words,
+        [next.id]: newWordMemory(state.wall, tutorialDue(state)),
+      },
       runSpent: spent(anchored, cost),
     },
   };
