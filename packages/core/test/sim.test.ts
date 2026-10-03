@@ -112,6 +112,7 @@ describe('initialState', () => {
       replays: {},
       runSpent: [0, 0],
       playableRegions: 3,
+      grammar: [],
     });
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
   });
@@ -276,6 +277,7 @@ const arbState = fc
     replays: {},
     runSpent: Num.toTuple(Num.from(0)),
     playableRegions: 3,
+    grammar: [],
   }));
 
 describe('integrate (AC6)', () => {
