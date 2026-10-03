@@ -7,9 +7,23 @@
  * any later time are derived and never stored. That is what makes splitting
  * an interval unable to change any stored arithmetic.
  */
+import { BALANCE, type JourneyDurationId } from './balance';
 import { simMs, type SimMs, type WallMs } from './clock';
 import type { WordMemory } from './memory';
 import { Num, type NumTuple } from './num';
+import { createStreams, type RngStreams } from './rng';
+
+/** The state's own random streams, one per purpose (design §3). */
+export const RNG_STREAMS = ['cards'] as const;
+
+/** A Journey out in a slot (design §5, #30). */
+export interface Journey {
+  readonly durationId: JourneyDurationId;
+  /** The simulated time it returns, fixed when it started. */
+  readonly returnsAt: SimMs;
+  /** The culture card it brings back, drawn when it started. */
+  readonly cardId: string;
+}
 
 export interface Anchor {
   /** The simulated time the stored quantities hold at. */
@@ -45,10 +59,21 @@ export interface GameState {
   readonly stampsEarned: number;
   /** Upgrade levels, by upgrade id. An id that is absent is at level 0. */
   readonly upgrades: Readonly<Record<string, number>>;
+  /** The random streams, named by `RNG_STREAMS`, so a replay draws the same. */
+  readonly rng: RngStreams;
+  /** Each Journey slot in turn, `null` when empty: `BALANCE.journeys.maxSlots` long. */
+  readonly journeys: readonly (Journey | null)[];
+  /** Culture cards held, by id, in the order they were collected. */
+  readonly cards: readonly string[];
+  /** Whether the once-per-game tutorial Journey has been started. */
+  readonly tutorialJourneyUsed: boolean;
 }
 
-/** A new game at wall time `wall`: nothing owned, no currency, no words, no upgrades. */
-export function initialState(wall: WallMs): GameState {
+/**
+ * A new game at wall time `wall` whose draws come from `seed`: nothing owned,
+ * no currency, no words, no upgrades, every Journey slot empty.
+ */
+export function initialState(wall: WallMs, seed: number): GameState {
   const start = simMs(0);
   return {
     sim: start,
@@ -61,6 +86,10 @@ export function initialState(wall: WallMs): GameState {
     stamps: 0,
     stampsEarned: 0,
     upgrades: {},
+    rng: createStreams(seed, RNG_STREAMS),
+    journeys: Array.from({ length: BALANCE.journeys.maxSlots }, () => null),
+    cards: [],
+    tutorialJourneyUsed: false,
   };
 }
 

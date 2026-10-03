@@ -101,7 +101,7 @@ function rich(
   understanding: number,
   owned: Record<string, number> = {},
 ): GameState {
-  const base = initialState(START);
+  const base = initialState(START, 1);
   return deepFreeze({
     ...base,
     anchor: {

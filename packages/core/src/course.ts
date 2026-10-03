@@ -47,6 +47,8 @@ export interface CultureCard {
   readonly tags: readonly string[];
   /** Permanent production bonus on the card's tags while held. */
   readonly bonus: number;
+  /** Words the card adds to the pick-up pool once held (parent §4.2). */
+  readonly phrasePack: readonly LexiconItem[];
   /** A real-calendar festival: the card's bonus is raised while a window is live. */
   readonly festival?: { readonly windows: readonly FestivalWindow[] };
 }

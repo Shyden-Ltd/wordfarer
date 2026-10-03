@@ -32,6 +32,7 @@ const region = (index: number): Region => {
 function allItems(c: CourseData): LexiconItem[] {
   return c.regions.flatMap((r) => [
     ...r.destinations.flatMap((d) => d.lexicon),
+    ...r.cultureCards.flatMap((card) => card.phrasePack),
     ...r.grammarNodes.flatMap((g) => g.derived),
   ]);
 }
@@ -103,8 +104,23 @@ describe('syntheticCourse', () => {
       ...course().regions.flatMap((r) => r.cultureCards.map((c) => c.id)),
     ];
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.length).toBe(3 * (150 + 12 + 6 + 12));
+    expect(ids.length).toBe(3 * (150 + 36 + 12 + 6 + 12));
   });
+
+  for (const index of REGION_INDICES)
+    it(`region ${String(index)} gives each of its 12 cards a phrase pack of 3 words, A1 to B1, on the card's tags`, () => {
+      const cards = region(index).cultureCards;
+      expect(nonEmpty(cards.map((c) => c.id))).toHaveLength(12);
+      expect(
+        nonEmpty(cards.flatMap((c) => c.phrasePack.map((w) => w.id))),
+      ).toHaveLength(36);
+      expect(cards.map((c) => c.phrasePack.map((w) => w.cefr))).toEqual(
+        cards.map(() => ['A1', 'A2', 'B1']),
+      );
+      expect(cards.map((c) => c.phrasePack.map((w) => w.tags))).toEqual(
+        cards.map((c) => [c.tags, c.tags, c.tags]),
+      );
+    });
 
   for (const index of REGION_INDICES)
     it(`region ${String(index)} orders each destination A1 first, and gives every grammar root words to multiply`, () => {

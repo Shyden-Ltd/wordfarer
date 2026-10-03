@@ -3,6 +3,7 @@ import fc from 'fast-check';
 import {
   createStreams,
   drawFrom,
+  intFrom,
   nextFloat,
   nextInt,
   nextU32,
@@ -123,6 +124,26 @@ describe('derived draws', () => {
 
 describe('named sub-streams', () => {
   const NAMES = ['recall', 'latency', 'opens'];
+
+  it('intFrom draws nextInt from one stream and leaves the others as they were', () => {
+    const streams = createStreams(7, NAMES);
+    const latency = streams['latency'];
+    if (latency === undefined) throw new Error('no latency stream');
+    const want = nextInt(latency, 12);
+    const r = intFrom(streams, 'latency', 12);
+    expect(r.value).toBe(want.value);
+    expect(r.streams['latency']).toEqual(want.state);
+    expect(r.streams['recall']).toBe(streams['recall']);
+    expect(r.streams['opens']).toBe(streams['opens']);
+  });
+
+  it('intFrom refuses a stream it does not hold, and an n nextInt refuses', () => {
+    const streams = createStreams(7, NAMES);
+    expect(() => intFrom(streams, 'toString', 3)).toThrow(
+      /no stream named toString/,
+    );
+    expect(() => intFrom(streams, 'recall', 0)).toThrow(RangeError);
+  });
 
   it('are reproducible from the seed and distinct from each other', () => {
     const a = createStreams(7, NAMES);

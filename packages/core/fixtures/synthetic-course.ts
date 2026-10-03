@@ -15,7 +15,7 @@ import { createStreams, nextInt, type RngStreams } from '../src/rng';
  * the pacing bots play until M2's real courses exist.
  *
  * Per region: 4 destinations holding 150 lexicon items, 6 Encounters, 3 sets
- * of 4 culture cards, and 4 grammar nodes with 2 roots and 3 derived words
+ * of 4 culture cards with a 3-word phrase pack each, and 4 grammar nodes with 2 roots and 3 derived words
  * each. 10 tags are shared across the course. Coverage is built in, not
  * hoped for: item i's first tag cycles through every tag, the Encounters of
  * each region cover every tag, and every root has items. The seed varies the
@@ -51,6 +51,8 @@ const SETS = 3;
 const CARDS_PER_SET = 4;
 const GRAMMAR_NODES = 4;
 const DERIVED_PER_NODE = 3;
+/** A card's phrase pack: one word at each CEFR level, on the card's tags. */
+const PACK_CEFR: readonly Cefr[] = ['A1', 'A2', 'B1'];
 
 /** Placeholder ladder: each Encounter costs 12x and yields 8x the one before. */
 const C0 = [10, 120, 1_440, 17_280, 207_360, 2_488_320] as const;
@@ -128,11 +130,18 @@ function region(
   const cultureCards: CultureCard[] = [];
   for (let s = 0; s < SETS; s++) {
     for (let c = 0; c < CARDS_PER_SET; c++) {
+      const id = `r${String(r)}-card-${String(s)}-${String(c)}`;
+      const tags = [tag(draw('card-tags', TAGS.length))];
       const card: CultureCard = {
-        id: `r${String(r)}-card-${String(s)}-${String(c)}`,
+        id,
         setId: `r${String(r)}-set-${String(s)}`,
-        tags: [tag(draw('card-tags', TAGS.length))],
+        tags,
         bonus: 0.05,
+        phrasePack: PACK_CEFR.map((cefr, j) => ({
+          id: `${id}-w${String(j)}`,
+          tags,
+          cefr,
+        })),
       };
       if (s === 0 && c === 0) {
         // One festival card per region, live for a week this year and next.

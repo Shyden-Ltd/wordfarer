@@ -19,6 +19,7 @@ export {
 export {
   createStreams,
   drawFrom,
+  intFrom,
   nextFloat,
   nextInt,
   nextU32,
@@ -29,8 +30,10 @@ export {
 } from './rng';
 export {
   BALANCE,
+  JOURNEY_DURATION_IDS,
   type Balance,
   type InsightUpgradeId,
+  type JourneyDurationId,
   type Rank,
   type StampUpgradeId,
 } from './balance';
@@ -40,6 +43,15 @@ export {
   milestonesReached,
   purchaseCost,
 } from './encounters';
+export { cultureCard, festivalLive, heldCards } from './cards';
+export {
+  cardPool,
+  collectJourney,
+  journeyDurationMs,
+  journeyStatus,
+  startJourney,
+  type JourneyStatus,
+} from './journeys';
 export {
   encounterRate,
   producedBetween,
@@ -71,7 +83,7 @@ export {
   type QueueItem,
   type WordMemory,
 } from './memory';
-export { pickUpCost } from './words';
+export { pickUpCost, pickUpPool } from './words';
 export {
   advance,
   answerPractice,
@@ -92,8 +104,10 @@ export {
   initialState,
   ownedCount,
   pickedWord,
+  RNG_STREAMS,
   type Anchor,
   type GameState,
+  type Journey,
 } from './state';
 export type {
   CardSet,

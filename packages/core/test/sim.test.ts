@@ -13,6 +13,7 @@ import {
   understandingNow,
   view,
 } from '../src/sim';
+import { createStreams } from '../src/rng';
 import { initialState, ownedCount, type GameState } from '../src/state';
 
 /**
@@ -60,7 +61,7 @@ function stateWith(
   understanding: number,
   leadMs = 0,
 ): GameState {
-  const base = initialState(START);
+  const base = initialState(START, 1);
   return deepFreeze({
     ...base,
     sim: simMs(leadMs),
@@ -96,7 +97,7 @@ function relativeError(got: Num, want: Num): number {
 
 describe('initialState', () => {
   it('starts with nothing at simulated time 0', () => {
-    const s = initialState(START);
+    const s = initialState(START, 1);
     expect(s).toEqual({
       sim: 0,
       wall: START,
@@ -108,12 +109,27 @@ describe('initialState', () => {
       stamps: 0,
       stampsEarned: 0,
       upgrades: {},
+      rng: createStreams(1, ['cards']),
+      journeys: [null, null, null],
+      cards: [],
+      tutorialJourneyUsed: false,
     });
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
   });
 
+  it('seeds its card stream from the seed', () => {
+    expect(initialState(START, 2).rng).toEqual(createStreams(2, ['cards']));
+    expect(initialState(START, 2).rng).not.toEqual(initialState(START, 1).rng);
+  });
+
+  it.each([-1, 1.5, Number.NaN])('refuses the seed %s', (seed) => {
+    expect(() => initialState(START, seed)).toThrow(
+      /a seed must be a safe non-negative integer/,
+    );
+  });
+
   it('reads owned counts from own keys only', () => {
-    const s = initialState(START);
+    const s = initialState(START, 1);
     expect(ownedCount(s, 'toString')).toBe(0);
     expect(ownedCount(s, 'constructor')).toBe(0);
     expect(ownedCount(stateWith({ tea: 3 }, 0), 'tea')).toBe(3);
@@ -122,7 +138,7 @@ describe('initialState', () => {
 
 describe('listen (AC1)', () => {
   it('adds exactly 1 Understanding to a new game', () => {
-    expect(u(listen(course, initialState(START)))).toEqual([1, 0]);
+    expect(u(listen(course, initialState(START, 1)))).toEqual([1, 0]);
   });
 
   it('adds exactly 1 to whatever is held, production included', () => {
@@ -134,7 +150,7 @@ describe('listen (AC1)', () => {
   });
 
   it('1,000 taps on a new game hold exactly 1,000', () => {
-    let s = initialState(START);
+    let s = initialState(START, 1);
     for (let i = 0; i < 1000; i++) s = listen(course, s);
     expect(u(s)).toEqual(Num.toTuple(Num.from(1000)));
   });
@@ -237,6 +253,10 @@ const arbState = fc
     stamps: 0,
     stampsEarned: r.stampsEarned,
     upgrades: r.phrasebook ? { 'phrasebook:food': 1 } : {},
+    rng: createStreams(1, ['cards']),
+    journeys: [null, null, null],
+    cards: [],
+    tutorialJourneyUsed: false,
   }));
 
 describe('integrate (AC6)', () => {
@@ -336,6 +356,7 @@ describe('advance (AC7)', () => {
       creditedMs: 0,
       clipped: false,
       understandingEarned: [0, 0],
+      journeysReturned: 0,
     });
   });
 
@@ -394,7 +415,7 @@ describe('no reachable state holds NaN, a negative or an infinite value (AC8)', 
         fc.property(
           fc.array(step, { minLength: 20, maxLength: 120, size: 'max' }),
           (steps) => {
-            let s = initialState(START);
+            let s = initialState(START, 1);
             for (const e of steps) {
               if (e.kind === 'listen') s = listen(course, s);
               if (e.kind === 'buy') {

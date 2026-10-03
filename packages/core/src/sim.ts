@@ -11,6 +11,7 @@
  * at the rates that held before it.
  */
 import { BALANCE } from './balance';
+import { heldCards } from './cards';
 import { simMs, wallMs, type WallMs } from './clock';
 import type { CourseData, Encounter } from './course';
 import { purchaseCost } from './encounters';
@@ -37,7 +38,7 @@ import {
   upgradeLevel,
   type UpgradeCurrency,
 } from './upgrades';
-import { currentDestination, curriculum, pickUpCost } from './words';
+import { pickUpCost, pickUpPool } from './words';
 
 export type Rejection =
   | { readonly kind: 'unknownEncounter'; readonly id: string }
@@ -67,6 +68,22 @@ export type Rejection =
       readonly currency: UpgradeCurrency;
       readonly cost: NumTuple;
       readonly held: NumTuple;
+    }
+  | { readonly kind: 'unknownSlot'; readonly slot: number }
+  | {
+      readonly kind: 'slotLocked';
+      readonly slot: number;
+      readonly open: number;
+    }
+  | { readonly kind: 'slotBusy'; readonly slot: number }
+  | { readonly kind: 'unknownDuration'; readonly durationId: string }
+  | { readonly kind: 'tutorialUsed' }
+  | { readonly kind: 'noCards' }
+  | { readonly kind: 'slotEmpty'; readonly slot: number }
+  | {
+      readonly kind: 'notReturned';
+      readonly slot: number;
+      readonly returnsAt: number;
     };
 
 export type Result =
@@ -79,6 +96,8 @@ export interface AdvanceSummary {
   /** Whether the offline cap cut the credit short. */
   readonly clipped: boolean;
   readonly understandingEarned: NumTuple;
+  /** Journeys whose return fell in the credited time (#30). */
+  readonly journeysReturned: number;
 }
 
 export interface View {
@@ -101,7 +120,7 @@ export function understandingNow(course: CourseData, state: GameState): Num {
 }
 
 /** Move the anchor to the state's simulated time, holding the same values. */
-function reanchor(course: CourseData, state: GameState): GameState {
+export function reanchor(course: CourseData, state: GameState): GameState {
   return {
     ...state,
     anchor: {
@@ -152,6 +171,9 @@ export function advance(
       creditedMs: credited,
       clipped,
       understandingEarned: Num.toTuple(earned),
+      journeysReturned: state.journeys.filter(
+        (j) => j !== null && state.sim < j.returnsAt && j.returnsAt <= next.sim,
+      ).length,
     },
   };
 }
@@ -235,12 +257,12 @@ export function buyEncounter(
 }
 
 /**
- * Pick up the next word of the current destination in curriculum order,
- * paying for it from Understanding (parent §3.3).
+ * Pick up the next word of the pick-up pool in curriculum order, paying for
+ * it from Understanding (parent §3.3): the current destination's lexicon and
+ * the held cards' phrase packs (#30).
  */
 export function pickUpWord(course: CourseData, state: GameState): Result {
-  const destination = currentDestination(course);
-  const pool = destination === undefined ? [] : curriculum(destination);
+  const pool = pickUpPool(course, heldCards(course, state));
   const next = pool.find((item) => pickedWord(state, item.id) === undefined);
   if (next === undefined) {
     return { ok: false, rejection: { kind: 'poolEmpty' } };

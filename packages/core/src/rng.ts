@@ -131,13 +131,27 @@ export function createStreams(
   return streams;
 }
 
+function streamState(streams: RngStreams, name: string): RngState {
+  const state = Object.hasOwn(streams, name) ? streams[name] : undefined;
+  if (state === undefined) throw new RangeError(`no stream named ${name}`);
+  return state;
+}
+
 /** The next 32-bit output of one stream; every other stream is untouched. */
 export function drawFrom(
   streams: RngStreams,
   name: string,
 ): { value: number; streams: RngStreams } {
-  const state = Object.hasOwn(streams, name) ? streams[name] : undefined;
-  if (state === undefined) throw new RangeError(`no stream named ${name}`);
-  const r = nextU32(state);
+  const r = nextU32(streamState(streams, name));
+  return { value: r.value, streams: { ...streams, [name]: r.state } };
+}
+
+/** A uniform integer in [0, n) from one stream; every other stream is untouched. */
+export function intFrom(
+  streams: RngStreams,
+  name: string,
+  n: number,
+): { value: number; streams: RngStreams } {
+  const r = nextInt(streamState(streams, name), n);
   return { value: r.value, streams: { ...streams, [name]: r.state } };
 }
