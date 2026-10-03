@@ -1,3 +1,4 @@
+import { posix } from 'node:path';
 import ts from 'typescript';
 
 /**
@@ -135,3 +136,106 @@ export function scanModule(file: string, source: string): ModuleScan {
  */
 export const rawRelativeImports = (source: string): number =>
   (source.match(/\b(?:from|import)\s*['"]\.\.?(?:\/|['"])/g) ?? []).length;
+
+/** The value imports between a set of modules, judged together. */
+export interface ImportGraph {
+  /** Every module read, as its path from the root (`grammar.ts`), sorted. */
+  readonly modules: readonly string[];
+  /** Relative declarations judged across every module, type-only included. */
+  readonly declarations: number;
+  /** Each module's value imports, resolved to modules read, each listed once. */
+  readonly edges: ReadonlyMap<string, readonly string[]>;
+  /** Modules whose raw text names more or fewer relative modules than were judged. */
+  readonly unread: readonly string[];
+  /** Forms and specifiers that could not be placed in the graph, each named. */
+  readonly refused: readonly string[];
+}
+
+/**
+ * The module a relative specifier names, or why it names none. A specifier
+ * is resolved as TypeScript's bundler resolution would within the modules
+ * read: as written when it ends in `.ts`, else with `.ts` added, else as a
+ * directory's `index.ts`.
+ */
+function resolve(
+  from: string,
+  specifier: string,
+  modules: ReadonlySet<string>,
+): { module: string } | { problem: string } {
+  const path = posix.normalize(posix.join(posix.dirname(from), specifier));
+  if (path === '..' || path.startsWith('../')) {
+    return { problem: `'${specifier}' reaches outside the modules read` };
+  }
+  const candidates = path.endsWith('.ts')
+    ? [path]
+    : [`${path}.ts`, posix.join(path, 'index.ts')];
+  const module = candidates.find((candidate) => modules.has(candidate));
+  return module === undefined
+    ? { problem: `'${specifier}' names no module read here` }
+    : { module };
+}
+
+/** The graph of value imports between `sources`, keyed by path from the root. */
+export function importGraph(sources: ReadonlyMap<string, string>): ImportGraph {
+  const modules = [...sources.keys()].sort();
+  const known = new Set(modules);
+  const edges = new Map<string, readonly string[]>();
+  const unread: string[] = [];
+  const refused: string[] = [];
+  let declarations = 0;
+
+  for (const file of modules) {
+    const source = sources.get(file) ?? '';
+    const scan = scanModule(file, source);
+    declarations += scan.imports.length;
+    refused.push(...scan.refused);
+
+    const raw = rawRelativeImports(source);
+    if (raw !== scan.imports.length) {
+      unread.push(
+        `${file}: the raw text names ${String(raw)} relative modules, the reader judged ${String(scan.imports.length)}`,
+      );
+    }
+
+    const targets = new Set<string>();
+    for (const { specifier, value } of scan.imports) {
+      const resolved = resolve(file, specifier, known);
+      if ('problem' in resolved) {
+        refused.push(`${file}: ${resolved.problem}`);
+      } else if (value) {
+        targets.add(resolved.module);
+      }
+    }
+    edges.set(file, [...targets]);
+  }
+  return { modules, declarations, edges, unread, refused };
+}
+
+/**
+ * Every elementary cycle in `edges`, each written once as `a -> b -> a` from
+ * its first module in sorted order. For each start module the search follows
+ * only modules sorted after it, so a cycle is found from its smallest module
+ * and from no other. An edge to a module with no entry in `edges` leads
+ * nowhere.
+ */
+export function cycles(
+  edges: ReadonlyMap<string, readonly string[]>,
+): string[] {
+  const found: string[] = [];
+  for (const start of edges.keys()) {
+    const path = [start];
+    const walk = (at: string): void => {
+      for (const next of edges.get(at) ?? []) {
+        if (next === start) {
+          found.push([...path, start].join(' -> '));
+        } else if (next > start && !path.includes(next)) {
+          path.push(next);
+          walk(next);
+          path.pop();
+        }
+      }
+    };
+    walk(start);
+  }
+  return found.sort();
+}
