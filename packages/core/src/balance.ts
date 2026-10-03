@@ -4,8 +4,8 @@
  *
  * These are starting values for the pacing bots (#35) to tune, and the
  * operator may veto any of them. The bots guard outcomes, not these
- * constants. Each later M1 story adds the keys its rules need (for example
- * the Set Sail goal curve in #31), and the `Balance` type makes a missing key
+ * constants. Each M1 story adds the keys its rules need (the Set Sail table
+ * came with #31), and the `Balance` type makes a missing key
  * a typecheck error. Times are integer milliseconds.
  */
 
@@ -128,6 +128,18 @@ export interface Balance {
     /** Pemandu intervals: the starting one, then each upgrade (design §5). */
     readonly intervalsMs: readonly number[];
   };
+  readonly sail: {
+    /** Destination i needs U_goal(i) = goalU0 x goalGrowth^i earned this run (design §5, #31). */
+    readonly goalU0: number;
+    readonly goalGrowth: number;
+    /** ...and words(i) = wordsBase + wordsStep x i of its own lexicon held. */
+    readonly wordsBase: number;
+    readonly wordsStep: number;
+    /** Sailing pays floor(stampK x sqrt(U_run / goal)) stamps (parent §4.4). */
+    readonly stampK: number;
+    /** Regions a new game may sail to when `initialState` is not told (parent §4.5). */
+    readonly playableRegions: number;
+  };
   readonly mastery: {
     /** A replayed destination's goal x goalGrowthPerReplay^replays (design §5). */
     readonly goalGrowthPerReplay: number;
@@ -227,6 +239,15 @@ export const BALANCE: Balance = deepFreeze({
   },
   grammar: { rootGain: 0.5 },
   automation: { intervalsMs: [10_000, 5_000, 2_000, 1_000] },
+  // Starting values with nothing measured yet; the pacing bots tune them (#35).
+  sail: {
+    goalU0: 10_000,
+    goalGrowth: 10,
+    wordsBase: 8,
+    wordsStep: 2,
+    stampK: 3,
+    playableRegions: 3,
+  },
   mastery: { goalGrowthPerReplay: 1.5 },
   seasons: { inSeasonMultiplier: 2 },
 });

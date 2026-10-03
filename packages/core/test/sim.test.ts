@@ -113,9 +113,29 @@ describe('initialState', () => {
       journeys: [null, null, null],
       cards: [],
       tutorialJourneyUsed: false,
+      destination: 0,
+      reached: 0,
+      finale: false,
+      replays: {},
+      runSpent: [0, 0],
+      playableRegions: 3,
     });
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
   });
+
+  it('plays every region of v1 unless told otherwise', () => {
+    expect(initialState(START, 1).playableRegions).toBe(3);
+    expect(initialState(START, 1, 1).playableRegions).toBe(1);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN])(
+    'refuses %s playable regions',
+    (regions) => {
+      expect(() => initialState(START, 1, regions)).toThrow(
+        /playable regions must be a positive safe integer/,
+      );
+    },
+  );
 
   it('seeds its card stream from the seed', () => {
     expect(initialState(START, 2).rng).toEqual(createStreams(2, ['cards']));
@@ -257,6 +277,12 @@ const arbState = fc
     journeys: [null, null, null],
     cards: [],
     tutorialJourneyUsed: false,
+    destination: 0,
+    reached: 0,
+    finale: false,
+    replays: {},
+    runSpent: Num.toTuple(Num.from(0)),
+    playableRegions: 3,
   }));
 
 describe('integrate (AC6)', () => {

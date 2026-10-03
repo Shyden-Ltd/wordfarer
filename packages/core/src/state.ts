@@ -67,13 +67,41 @@ export interface GameState {
   readonly cards: readonly string[];
   /** Whether the once-per-game tutorial Journey has been started. */
   readonly tutorialJourneyUsed: boolean;
+  /**
+   * The current destination's number: the course's destinations counted
+   * region by region in course order, from 0 (design §5, #31).
+   */
+  readonly destination: number;
+  /** The furthest destination sailed to: every one up to it has been visited. */
+  readonly reached: number;
+  /** Whether the course's last destination has been completed (parent §4.7). */
+  readonly finale: boolean;
+  /** Mastery replays, by destination id. An id that is absent has had none. */
+  readonly replays: Readonly<Record<string, number>>;
+  /**
+   * Understanding this run has spent on Encounters and pick-ups: with what is
+   * held, it makes the Understanding earned this run (`U_run`).
+   */
+  readonly runSpent: NumTuple;
+  /** How many of the course's regions, from the first, may be sailed to. */
+  readonly playableRegions: number;
 }
 
 /**
  * A new game at wall time `wall` whose draws come from `seed`: nothing owned,
- * no currency, no words, no upgrades, every Journey slot empty.
+ * no currency, no words, no upgrades, every Journey slot empty, at the first
+ * destination, able to sail through the first `playableRegions` regions.
  */
-export function initialState(wall: WallMs, seed: number): GameState {
+export function initialState(
+  wall: WallMs,
+  seed: number,
+  playableRegions: number = BALANCE.sail.playableRegions,
+): GameState {
+  if (!Number.isSafeInteger(playableRegions) || playableRegions < 1) {
+    throw new RangeError(
+      `playable regions must be a positive safe integer, got ${String(playableRegions)}`,
+    );
+  }
   const start = simMs(0);
   return {
     sim: start,
@@ -90,6 +118,12 @@ export function initialState(wall: WallMs, seed: number): GameState {
     journeys: Array.from({ length: BALANCE.journeys.maxSlots }, () => null),
     cards: [],
     tutorialJourneyUsed: false,
+    destination: 0,
+    reached: 0,
+    finale: false,
+    replays: {},
+    runSpent: Num.toTuple(Num.from(0)),
+    playableRegions,
   };
 }
 
