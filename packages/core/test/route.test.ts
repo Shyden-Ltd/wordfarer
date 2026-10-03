@@ -256,6 +256,6 @@ describe('Understanding spent this run', () => {
   it('a Listen tap and the passing of time spend nothing', () => {
     const s = { ...at(0, 0, 100), runSpent: tuple(7) };
     expect(listen(course, s).runSpent).toEqual(tuple(7));
-    expect(integrate(s, DAY_MS).runSpent).toEqual(tuple(7));
+    expect(integrate(course, s, DAY_MS).runSpent).toEqual(tuple(7));
   });
 });

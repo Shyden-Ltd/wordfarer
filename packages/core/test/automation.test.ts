@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { simMs, wallMs, type WallMs } from '../src/clock';
+import fc from 'fast-check';
+import { nextGridTick, simMs, wallMs, type WallMs } from '../src/clock';
 import type { CourseData, Destination, Encounter, Region } from '../src/course';
 import {
   automationOpensAt,
@@ -10,12 +11,20 @@ import { newWordMemory, review, type WordMemory } from '../src/memory';
 import { Num, type NumTuple } from '../src/num';
 import { rateBreakdown, rateGain, understandingNow } from '../src/production';
 import { setSail } from '../src/sail';
-import { setAutomation, type Rejection, type Result } from '../src/sim';
+import {
+  advance,
+  buyEncounter,
+  integrate,
+  setAutomation,
+  type Rejection,
+  type Result,
+} from '../src/sim';
 import { initialState, type GameState } from '../src/state';
 import { encounterPrice } from '../src/upgrades';
 
 /**
- * Pemandu automation (#33): the unlock and the setting (AC1).
+ * Pemandu automation (#33): the unlock and the setting (AC1), the choice
+ * and the purchases `integrate` makes (AC2).
  *
  * The course is declared here, so it is checked against the `CourseData`
  * contract rather than sharing it. Its route numbers destinations 0 to 3 in
@@ -403,5 +412,164 @@ describe('bestPayback (AC2)', () => {
 
   it('breaks a tie by id in code-unit order', () => {
     expect(bestPayback(twins, at(0, { held: 100 }))).toBe('Zed');
+  });
+});
+
+/** Pemandu on at `intervalMs` from the state's own time, by the real action. */
+function pemandu(state: GameState, intervalMs = 10_000): GameState {
+  return ok(setAutomation(course, state, true, intervalMs));
+}
+
+function unitsOwned(state: GameState): number {
+  return Object.values(state.owned).reduce((a, b) => a + b, 0);
+}
+
+/** The reference: every tick in (anchor, sim + elapsed], one at a time. */
+function tickByTick(c: CourseData, s: GameState, elapsed: number): GameState {
+  const until = s.sim + elapsed;
+  const every = s.automation.intervalMs;
+  let x = s;
+  for (
+    let t = nextGridTick(s.anchor.sim, every);
+    t <= until;
+    t = simMs(t + every)
+  ) {
+    const here = { ...x, sim: t, wall: wallMs(x.wall + t - x.sim) };
+    const id = bestPayback(c, here);
+    if (id !== undefined) x = ok(buyEncounter(c, here, id, 1));
+  }
+  return { ...x, sim: simMs(until), wall: wallMs(s.wall + elapsed) };
+}
+
+describe('integrate with Pemandu (AC2)', () => {
+  const RICH = { held: 1e9, owned: { tea0: 1 } };
+
+  it('buys nothing while Pemandu is off, however much is held', () => {
+    const s = at(4, RICH);
+    const later = integrate(course, s, 60_000);
+    expect(later.owned).toEqual(s.owned);
+    expect(later.anchor).toEqual(s.anchor);
+  });
+
+  it('buys one unit at each tick, the last one at the new time', () => {
+    const later = integrate(course, pemandu(at(4, RICH)), 60_000);
+    expect(unitsOwned(later) - 1).toBe(6);
+    expect(later.anchor.sim).toBe(60_000);
+  });
+
+  it('buys at the multiples of 5 s, not 5 s after Pemandu was set', () => {
+    const s = pemandu(
+      at(4, { ...RICH, simMs: 2_345, upgrades: ALL_TIERS }),
+      5_000,
+    );
+    const later = integrate(course, s, 9_999);
+    expect(unitsOwned(later) - 1).toBe(2);
+    expect(later.anchor.sim).toBe(10_000);
+  });
+
+  it('buys nothing at the tick Pemandu was set on', () => {
+    const s = pemandu(at(4, { ...RICH, simMs: 20_000 }));
+    expect(integrate(course, s, 9_999).owned).toEqual(s.owned);
+  });
+
+  it('buys nothing when nothing is owned and nothing is affordable', () => {
+    const s = pemandu(at(4, { held: 9 }));
+    expect(integrate(course, s, 3_600_000).owned).toEqual({});
+  });
+
+  it('pays what a purchase by hand pays, with the stamp discount', () => {
+    const s = pemandu(at(4, { held: 9.6, upgrades: { encounterDiscount: 1 } }));
+    const later = integrate(course, s, 10_000);
+    expect(later.owned).toEqual({ tea0: 1 });
+    expect(Num.toNumber(Num.fromTuple(later.runSpent))).toBeCloseTo(9.5, 12);
+  });
+
+  it(
+    'equals buying tick by tick with bestPayback and buyEncounter, over generated states',
+    { timeout: 120_000 },
+    () => {
+      let bought = 0;
+      fc.assert(
+        fc.property(
+          fc.record({
+            interval: fc.constantFrom(10_000, 5_000, 2_000, 1_000),
+            reached: fc.constantFrom(3, 4, 8),
+            tea0: fc.integer({ min: 0, max: 40 }),
+            market0: fc.integer({ min: 0, max: 20 }),
+            tea1: fc.integer({ min: 0, max: 10 }),
+            held: fc.integer({ min: 0, max: 5_000 }),
+            sim: fc.integer({ min: 0, max: 30 * 3_600_000 }),
+            ticks: fc.integer({ min: 0, max: 150 }),
+            discount: fc.integer({ min: 0, max: 2 }),
+            phrasebook: fc.boolean(),
+            reviewed: fc.integer({ min: 0, max: 5 }),
+          }),
+          (r) => {
+            // Reviewed words make each bonus hang on the wall clock, so a
+            // tick bought at the wrong skew between the clocks pays wrong.
+            // Each review falls before the anchor at 0, as every review in
+            // a real game falls at or before `memorySince`.
+            const words = Object.fromEntries(
+              Array.from({ length: r.reviewed }, (_, k) => {
+                const when = wallMs(START - (k + 1) * 86_400_000);
+                return [
+                  `r0-d0-w${String(k)}`,
+                  review(newWordMemory(when), when, true),
+                ];
+              }),
+            );
+            const s = pemandu(
+              at(r.reached, {
+                held: r.held,
+                simMs: r.sim,
+                words,
+                owned: { tea0: r.tea0, market0: r.market0, tea1: r.tea1 },
+                upgrades: {
+                  ...ALL_TIERS,
+                  ...EARLY,
+                  ...(r.discount > 0 ? { encounterDiscount: r.discount } : {}),
+                  ...(r.phrasebook ? { 'phrasebook:food': 1 } : {}),
+                },
+              }),
+              r.interval,
+            );
+            const elapsed = r.ticks * r.interval;
+            const got = integrate(course, s, elapsed);
+            expect(got).toEqual(tickByTick(course, s, elapsed));
+            bought += unitsOwned(got) - unitsOwned(s);
+          },
+        ),
+        { numRuns: 300, seed: 33 },
+      );
+      // Seeded: the 300 states bought 19,446 units (measured, #33), less one.
+      expect(bought).toBeGreaterThan(19_445);
+    },
+  );
+});
+
+describe('advance with Pemandu (AC2)', () => {
+  it('reports what was produced, not what is left after Pemandu spent', () => {
+    const s = pemandu({
+      ...at(4, { held: 1e9, owned: { tea0: 1 } }),
+      runSpent: tuple(500),
+    });
+    const { state: later, summary } = advance(
+      course,
+      s,
+      wallMs(s.wall + 60_000),
+    );
+    const spent = Num.sub(
+      Num.fromTuple(later.runSpent),
+      Num.fromTuple(s.runSpent),
+    );
+    expect(Num.toNumber(spent)).toBeGreaterThan(0);
+    expect(summary.understandingEarned).toEqual(
+      Num.toTuple(
+        Num.add(
+          Num.sub(understandingNow(course, later), understandingNow(course, s)),
+          spent,
+        ),
+      ),
+    );
   });
 });

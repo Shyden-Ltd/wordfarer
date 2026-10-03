@@ -117,7 +117,7 @@ function cardIn(state: GameState, slot: number): string {
 /** Start a 2 h Journey in slot 0, let it return, collect it. */
 function roundTrip(c: CourseData, state: GameState): GameState {
   const out = ok(startJourney(c, state, 0, '2h'));
-  return ok(collectJourney(c, integrate(out, 2 * HOUR_MS), 0));
+  return ok(collectJourney(c, integrate(c, out, 2 * HOUR_MS), 0));
 }
 
 /** The indexes the `cards` stream of `seed` draws over `n` cards, `count` times. */
@@ -156,7 +156,7 @@ const LISTED_MS: Readonly<Record<string, number>> = {
 describe('starting a Journey (AC1)', () => {
   for (const id of JOURNEY_DURATION_IDS)
     it(`sends a ${id} Journey out for its listed duration`, () => {
-      const s = integrate(game(), 5_000);
+      const s = integrate(course, game(), 5_000);
       const out = ok(startJourney(course, s, 0, id));
       expect(out.journeys[0]?.returnsAt).toBe(5_000 + (LISTED_MS[id] ?? -1));
       expect(out.journeys[0]?.durationId).toBe(id);
@@ -218,7 +218,11 @@ describe('starting a Journey (AC1)', () => {
   });
 
   it('refuses a slot whose Journey has returned but is not collected', () => {
-    const back = integrate(ok(startJourney(course, game(), 0, '2h')), DAY_MS);
+    const back = integrate(
+      course,
+      ok(startJourney(course, game(), 0, '2h')),
+      DAY_MS,
+    );
     expect(journeyStatus(back, 0)).toBe('returned');
     expect(refusal(startJourney(course, back, 0, '4h'))).toEqual({
       kind: 'slotBusy',
@@ -236,7 +240,9 @@ describe('starting a Journey (AC1)', () => {
   it('allows the tutorial Journey once per game', () => {
     const first = ok(startJourney(course, game(), 0, 'tutorial'));
     expect(first.tutorialJourneyUsed).toBe(true);
-    const back = ok(collectJourney(course, integrate(first, HOUR_MS), 0));
+    const back = ok(
+      collectJourney(course, integrate(course, first, HOUR_MS), 0),
+    );
     expect(refusal(startJourney(course, back, 0, 'tutorial'))).toEqual({
       kind: 'tutorialUsed',
     });
@@ -253,21 +259,25 @@ describe('starting a Journey (AC1)', () => {
 describe('the return (AC2)', () => {
   it('is away until its return time and returned from that ms', () => {
     const out = ok(startJourney(course, game(), 0, '2h'));
-    expect(journeyStatus(integrate(out, 2 * HOUR_MS - 1), 0)).toBe('away');
-    expect(journeyStatus(integrate(out, 2 * HOUR_MS), 0)).toBe('returned');
+    expect(journeyStatus(integrate(course, out, 2 * HOUR_MS - 1), 0)).toBe(
+      'away',
+    );
+    expect(journeyStatus(integrate(course, out, 2 * HOUR_MS), 0)).toBe(
+      'returned',
+    );
   });
 
   it('falls at the same time however integrate is split, with Journeys in flight', () => {
     const three = game(1, { journeySlot2: 1, journeySlot3: 1 });
     let s = ok(startJourney(course, three, 0, '2h'));
-    s = ok(startJourney(course, integrate(s, 1_234), 1, '8h'));
+    s = ok(startJourney(course, integrate(course, s, 1_234), 1, '8h'));
     s = ok(startJourney(course, s, 2, '24h'));
     const out = s;
     const gap = fc.integer({ min: 0, max: 30 * HOUR_MS });
     fc.assert(
       fc.property(gap, gap, (a, b) => {
-        const split = integrate(integrate(out, a), b);
-        const whole = integrate(out, a + b);
+        const split = integrate(course, integrate(course, out, a), b);
+        const whole = integrate(course, out, a + b);
         expect(split).toEqual(whole);
         expect([0, 1, 2].map((slot) => journeyStatus(split, slot))).toEqual(
           [0, 1, 2].map((slot) => journeyStatus(whole, slot)),
@@ -300,7 +310,7 @@ describe('the card draw (AC3, AC5)', () => {
     while (new Set(drawn).size < pool.length && drawn.length < 100) {
       const out = ok(startJourney(course, s, 0, '2h'));
       drawn.push(cardIn(out, 0));
-      s = ok(collectJourney(course, integrate(out, 2 * HOUR_MS), 0));
+      s = ok(collectJourney(course, integrate(course, out, 2 * HOUR_MS), 0));
     }
     expect(new Set(drawn).size).toBe(pool.length);
     expect(drawn.length).toBeGreaterThan(pool.length);
@@ -325,20 +335,26 @@ describe('collecting (AC4, AC6)', () => {
   it('refuses one ms before the return, naming the return time', () => {
     const out = ok(startJourney(course, game(), 0, '2h'));
     expect(
-      refusal(collectJourney(course, integrate(out, 2 * HOUR_MS - 1), 0)),
+      refusal(
+        collectJourney(course, integrate(course, out, 2 * HOUR_MS - 1), 0),
+      ),
     ).toEqual({ kind: 'notReturned', slot: 0, returnsAt: 2 * HOUR_MS });
   });
 
   it('collects at the return time and empties the slot', () => {
     const out = ok(startJourney(course, game(), 0, '2h'));
-    const back = ok(collectJourney(course, integrate(out, 2 * HOUR_MS), 0));
+    const back = ok(
+      collectJourney(course, integrate(course, out, 2 * HOUR_MS), 0),
+    );
     expect(back.cards).toEqual([cardIn(out, 0)]);
     expect(journeyStatus(back, 0)).toBe('empty');
   });
 
   it('credits the card exactly once when collected days later', () => {
     const out = ok(startJourney(course, game(), 0, '2h'));
-    const back = ok(collectJourney(course, integrate(out, 3 * DAY_MS), 0));
+    const back = ok(
+      collectJourney(course, integrate(course, out, 3 * DAY_MS), 0),
+    );
     expect(back.cards).toEqual([cardIn(out, 0)]);
     expect(refusal(collectJourney(course, back, 0))).toEqual({
       kind: 'slotEmpty',
@@ -355,7 +371,7 @@ describe('collecting (AC4, AC6)', () => {
 
   it("counts a new card's bonus from collection, not from the return", () => {
     const out = ok(startJourney(solo, game(), 0, '2h'));
-    const late = integrate(out, DAY_MS);
+    const late = integrate(course, out, DAY_MS);
     const back = ok(collectJourney(solo, late, 0));
     expect(understandingNow(solo, back)).toEqual(understandingNow(solo, late));
     const ratio = Num.toNumber(
@@ -413,7 +429,7 @@ describe('a repeat card (AC7)', () => {
       const [insight, ms] = REPEAT[id] ?? [-1, -1];
       const held: GameState = { ...game(), cards: ['solo'] };
       const out = ok(startJourney(solo, held, 0, id));
-      const back = integrate(out, DAY_MS);
+      const back = integrate(solo, out, DAY_MS);
       const paid = ok(collectJourney(solo, back, 0));
       expect(Num.toNumber(Num.fromTuple(paid.insight))).toBe(insight);
       const want = Num.add(
@@ -434,7 +450,11 @@ describe('a repeat card (AC7)', () => {
 
   it('changes no held card and no bonus', () => {
     const held: GameState = { ...game(), cards: ['solo'] };
-    const back = integrate(ok(startJourney(solo, held, 0, '2h')), 2 * HOUR_MS);
+    const back = integrate(
+      solo,
+      ok(startJourney(solo, held, 0, '2h')),
+      2 * HOUR_MS,
+    );
     const paid = ok(collectJourney(solo, back, 0));
     expect(paid.cards).toEqual(['solo']);
     expect(rateBreakdown(solo, paid, paid.sim)).toEqual(
@@ -446,7 +466,7 @@ describe('a repeat card (AC7)', () => {
     let s = ok(startJourney(solo, game(1, { journeySlot2: 1 }), 0, '2h'));
     s = ok(startJourney(solo, s, 1, '2h'));
     expect([cardIn(s, 0), cardIn(s, 1)]).toEqual(['solo', 'solo']);
-    const first = ok(collectJourney(solo, integrate(s, 2 * HOUR_MS), 1));
+    const first = ok(collectJourney(solo, integrate(solo, s, 2 * HOUR_MS), 1));
     expect(first.cards).toEqual(['solo']);
     expect(first.insight).toEqual(s.insight);
     const second = ok(collectJourney(solo, first, 0));

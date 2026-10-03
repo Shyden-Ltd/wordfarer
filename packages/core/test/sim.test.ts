@@ -71,6 +71,10 @@ function u(state: GameState): NumTuple {
   return Num.toTuple(understandingNow(course, state));
 }
 
+function units(state: GameState): number {
+  return Object.values(state.owned).reduce((a, b) => a + b, 0);
+}
+
 function json(state: GameState): string {
   return JSON.stringify(state);
 }
@@ -200,7 +204,7 @@ describe('view (AC4)', () => {
 
   it('stores nothing but the anchor: integrate leaves the anchor alone', () => {
     const s = stateWith({ tea: 5 }, 7, 60_000);
-    expect(integrate(s, 3 * HOUR_MS).anchor).toEqual(s.anchor);
+    expect(integrate(course, s, 3 * HOUR_MS).anchor).toEqual(s.anchor);
   });
 });
 
@@ -230,8 +234,8 @@ describe('production inside an hour (AC5)', () => {
         (from, span) => {
           const to = Math.min(from + span, HOUR_MS - 1);
           fc.pre(to > from);
-          const a = understandingNow(course, integrate(s, from));
-          const b = understandingNow(course, integrate(s, to));
+          const a = understandingNow(course, integrate(course, s, from));
+          const b = understandingNow(course, integrate(course, s, to));
           const perSecond = Num.div(
             Num.mul(Num.sub(b, a), Num.from(1000)),
             Num.from(to - from),
@@ -290,8 +294,8 @@ describe('integrate (AC6)', () => {
       const gap = fc.integer({ min: 0, max: 72 * HOUR_MS });
       fc.assert(
         fc.property(arbState, gap, gap, (s, a, b) => {
-          const split = integrate(integrate(s, a), b);
-          const whole = integrate(s, a + b);
+          const split = integrate(course, integrate(course, s, a), b);
+          const whole = integrate(course, s, a + b);
           expect(split).toEqual(whole);
           expect(u(split)).toEqual(u(whole));
         }),
@@ -300,9 +304,36 @@ describe('integrate (AC6)', () => {
     },
   );
 
+  it(
+    'integrate(integrate(s, a), b) deep-equals integrate(s, a + b) with Pemandu buying (#33 AC4)',
+    { timeout: PROPERTY_TIMEOUT_MS },
+    () => {
+      const gap = fc.integer({ min: 0, max: 72 * HOUR_MS });
+      const pemandu = fc
+        .tuple(arbState, fc.constantFrom(10_000, 5_000, 2_000, 1_000))
+        .map(([s, intervalMs]): GameState => ({
+          ...s,
+          automation: { enabled: true, intervalMs },
+        }));
+      let bought = 0;
+      fc.assert(
+        fc.property(pemandu, gap, gap, (s, a, b) => {
+          const split = integrate(course, integrate(course, s, a), b);
+          const whole = integrate(course, s, a + b);
+          expect(split).toEqual(whole);
+          expect(u(split)).toEqual(u(whole));
+          bought += units(whole) - units(s);
+        }),
+        { numRuns: 300, seed: 33 },
+      );
+      // Seeded: the 300 states bought 63,533 units (measured, #33), less one.
+      expect(bought).toBeGreaterThan(63_532);
+    },
+  );
+
   it('moves both clocks by the same amount', () => {
     const s = stateWith({ tea: 1 }, 0, 500);
-    const t = integrate(s, 1234);
+    const t = integrate(course, s, 1234);
     expect(t.sim - s.sim).toBe(1234);
     expect(t.wall - s.wall).toBe(1234);
   });
@@ -310,7 +341,7 @@ describe('integrate (AC6)', () => {
   it.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])(
     'refuses an elapsed time of %s',
     (elapsed) => {
-      expect(() => integrate(stateWith({}, 0, 5_000), elapsed)).toThrow(
+      expect(() => integrate(course, stateWith({}, 0, 5_000), elapsed)).toThrow(
         /SimMs must be a safe non-negative integer/,
       );
     },

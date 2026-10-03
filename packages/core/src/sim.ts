@@ -10,10 +10,14 @@
  * stored quantity re-anchors first, so production up to the action is banked
  * at the rates that held before it.
  */
-import { automationUnlocked } from './automation';
+import {
+  automationUnlocked,
+  bestPayback,
+  nextPurchaseTick,
+} from './automation';
 import { BALANCE } from './balance';
 import { heldCards } from './cards';
-import { simMs, wallMs, type WallMs } from './clock';
+import { simMs, wallMs, type SimMs, type WallMs } from './clock';
 import type { CourseData, Encounter } from './course';
 import { findGrammarNode, grammarNodeCost, ownedGrammarNodes } from './grammar';
 import {
@@ -172,14 +176,55 @@ export function reanchor(course: CourseData, state: GameState): GameState {
   };
 }
 
-/** Move both clocks forward by `elapsedMs`, uncapped (design §2.3). */
-export function integrate(state: GameState, elapsedMs: number): GameState {
+/**
+ * Move both clocks forward by `elapsedMs`, uncapped (design §2.3). With
+ * Pemandu on, each tick of its grid in `(anchor, new sim]` at which a unit
+ * is affordable buys one, at that tick, re-anchoring there (#33). Each tick
+ * is found from the anchor alone, so splitting the interval makes the same
+ * purchases at the same ticks, and stored arithmetic still cannot tell.
+ */
+export function integrate(
+  course: CourseData,
+  state: GameState,
+  elapsedMs: number,
+): GameState {
   const elapsed = simMs(elapsedMs);
-  return {
+  const until = simMs(state.sim + elapsed);
+  let next = state;
+  if (state.automation.enabled) {
+    let { tick } = nextPurchaseTick(course, next, until);
+    while (tick !== undefined) {
+      next = pemanduBuys(course, next, tick);
+      ({ tick } = nextPurchaseTick(course, next, until));
+    }
+  }
+  return { ...next, sim: until, wall: wallMs(state.wall + elapsed) };
+}
+
+/**
+ * One Pemandu tick: the state moved to `tick`, the skew between its clocks
+ * kept, buys one unit of the best payback there, exactly as a purchase by
+ * hand would. `nextPurchaseTick` found a unit affordable at `tick`, so a
+ * refusal here means the two disagree, and that is thrown, never skipped.
+ */
+function pemanduBuys(
+  course: CourseData,
+  state: GameState,
+  tick: SimMs,
+): GameState {
+  const at = {
     ...state,
-    sim: simMs(state.sim + elapsed),
-    wall: wallMs(state.wall + elapsed),
+    sim: tick,
+    wall: wallMs(state.wall + tick - state.sim),
   };
+  const id = bestPayback(course, at);
+  const bought = id === undefined ? undefined : buyEncounter(course, at, id, 1);
+  if (bought === undefined || !bought.ok) {
+    throw new Error(
+      `Pemandu found a unit affordable at ${String(tick)} but bought none: ${JSON.stringify(bought)}`,
+    );
+  }
+  return bought.state;
 }
 
 /**
@@ -198,14 +243,16 @@ export function advance(
   const elapsed = now - state.wall;
   const cap = offlineCapMs(state);
   const credited = Math.min(Math.max(elapsed, 0), cap);
-  let next = integrate(state, credited);
+  let next = integrate(course, state, credited);
   const clipped = elapsed > cap;
   if (clipped) {
     next = { ...reanchor(course, next), wall: now, memorySince: next.sim };
   }
-  const earned = Num.sub(
-    understandingNow(course, next),
-    understandingNow(course, state),
+  // Earned is what was produced: what is held now less what was held, plus
+  // what Pemandu spent in between (#33).
+  const earned = Num.add(
+    Num.sub(understandingNow(course, next), understandingNow(course, state)),
+    Num.sub(Num.fromTuple(next.runSpent), Num.fromTuple(state.runSpent)),
   );
   return {
     state: next,

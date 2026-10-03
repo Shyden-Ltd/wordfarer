@@ -136,6 +136,7 @@ function stateAt(
 ): GameState {
   const base = initialState(START, 1);
   return integrate(
+    course,
     {
       ...base,
       destination: at,

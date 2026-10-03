@@ -83,12 +83,16 @@ function holding(understanding: number): GameState {
 
 /** A game whose first word was picked up `ms` ago. */
 function tutorialAfter(ms: number): GameState {
-  return integrate(ok(pickUpWord(course, holding(20))), ms);
+  return integrate(course, ok(pickUpWord(course, holding(20))), ms);
 }
 
 /** A game whose tutorial Journey left at START, `ms` later. */
 function journeyAfter(ms: number): GameState {
-  return integrate(ok(startJourney(course, holding(0), 0, 'tutorial')), ms);
+  return integrate(
+    course,
+    ok(startJourney(course, holding(0), 0, 'tutorial')),
+    ms,
+  );
 }
 
 /** A game at destination 0 holding its 8 words and `understanding`. */
@@ -344,7 +348,7 @@ describe('no flag ever turns off', () => {
         return next;
       }
       case 'wait':
-        return integrate(s, a.ms);
+        return integrate(course, s, a.ms);
       case 'buy':
         return kept(buyEncounter(course, s, 'e0', 1));
       case 'pickUp':
