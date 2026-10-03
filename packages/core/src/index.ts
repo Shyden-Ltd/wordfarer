@@ -19,6 +19,7 @@ export {
 export {
   createStreams,
   drawFrom,
+  intFrom,
   nextFloat,
   nextInt,
   nextU32,
@@ -29,8 +30,10 @@ export {
 } from './rng';
 export {
   BALANCE,
+  JOURNEY_DURATION_IDS,
   type Balance,
   type InsightUpgradeId,
+  type JourneyDurationId,
   type Rank,
   type StampUpgradeId,
 } from './balance';
@@ -92,8 +95,10 @@ export {
   initialState,
   ownedCount,
   pickedWord,
+  RNG_STREAMS,
   type Anchor,
   type GameState,
+  type Journey,
 } from './state';
 export type {
   CardSet,

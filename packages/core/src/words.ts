@@ -56,7 +56,7 @@ export function sharesTag(a: readonly string[], b: readonly string[]): boolean {
 
 const itemIndexes = new WeakMap<CourseData, ReadonlyMap<string, LexiconItem>>();
 
-/** The lexicon item `id` anywhere in the course. */
+/** The lexicon item `id` anywhere in the course: a destination's, or a card's phrase pack's. */
 export function lexiconItem(course: CourseData, id: string): LexiconItem {
   let index = itemIndexes.get(course);
   if (index === undefined) {
@@ -64,6 +64,9 @@ export function lexiconItem(course: CourseData, id: string): LexiconItem {
     for (const region of course.regions) {
       for (const destination of region.destinations) {
         for (const item of destination.lexicon) built.set(item.id, item);
+      }
+      for (const card of region.cultureCards) {
+        for (const item of card.phrasePack) built.set(item.id, item);
       }
     }
     itemIndexes.set(course, built);

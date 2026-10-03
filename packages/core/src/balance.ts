@@ -26,6 +26,19 @@ export type InsightUpgradeId =
 export type StampUpgradeId =
   'startingUnderstanding' | 'encounterDiscount' | 'journeyCut' | 'pemanduEarly';
 
+/**
+ * Journey durations by id, in the order of `BALANCE.journeys` tables: the
+ * once-per-game tutorial outing first (parent §4.2, design §5).
+ */
+export const JOURNEY_DURATION_IDS = [
+  'tutorial',
+  '2h',
+  '4h',
+  '8h',
+  '24h',
+] as const;
+export type JourneyDurationId = (typeof JOURNEY_DURATION_IDS)[number];
+
 /** Word ranks, Heard (new) to Mastered (parent §3.4). */
 export type Rank = 'heard' | 'recognised' | 'recalled' | 'fluent' | 'mastered';
 
@@ -69,6 +82,10 @@ export interface Balance {
   readonly journeys: {
     /** Tutorial outing first, then the regular durations (parent §4.2). */
     readonly durationsMs: readonly number[];
+    /** A repeat card's Insight, by duration (operator, 2026-10-03, #30). */
+    readonly duplicateInsight: readonly number[];
+    /** A repeat card's Understanding: this long at the rate at collection, by duration. */
+    readonly duplicateUnderstandingMs: readonly number[];
     readonly startingSlots: number;
     readonly maxSlots: number;
   };
@@ -164,6 +181,15 @@ export const BALANCE: Balance = deepFreeze({
       4 * HOUR_MS,
       8 * HOUR_MS,
       24 * HOUR_MS,
+    ],
+    duplicateInsight: [1, 2, 3, 5, 10],
+    // A quarter of each duration, a starting value with nothing measured yet.
+    duplicateUnderstandingMs: [
+      7.5 * MINUTE_MS,
+      30 * MINUTE_MS,
+      HOUR_MS,
+      2 * HOUR_MS,
+      6 * HOUR_MS,
     ],
     startingSlots: 1,
     maxSlots: 3,

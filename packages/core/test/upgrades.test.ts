@@ -78,7 +78,7 @@ interface Holding {
 
 /** A game `leadMs` past its anchor, holding the given currencies and levels. */
 function holding(h: Holding): GameState {
-  const base = initialState(START);
+  const base = initialState(START, 1);
   const lead = h.leadMs ?? 0;
   return deepFreeze({
     ...base,

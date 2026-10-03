@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BALANCE, type Balance } from '../src/balance';
+import { BALANCE, JOURNEY_DURATION_IDS, type Balance } from '../src/balance';
 
 /**
  * balance.ts: one frozen table of every tunable number (#26 AC7).
@@ -29,9 +29,10 @@ describe('BALANCE', () => {
         expect(Object.isFrozen(value), path).toBe(true);
       }
     });
-    // Liveness: the walk reached the nested tables and arrays. Measured 31
-    // at b2a6f3f (#82); raise it with BALANCE, lower it only when BALANCE shrinks.
-    expect(containers.length).toBeGreaterThan(30);
+    // Liveness: the walk reached the nested tables and arrays. Measured 33
+    // with #30's two journey tables (31 at b2a6f3f, #82); raise it with
+    // BALANCE, lower it only when BALANCE shrinks.
+    expect(containers.length).toBeGreaterThan(32);
     expect(() => {
       (BALANCE.encounters as { costGrowth: number }).costGrowth = 2;
     }).toThrow(TypeError);
@@ -51,8 +52,9 @@ describe('BALANCE', () => {
         );
       }
     });
-    // Measured 74 at b2a6f3f (#82); raise it with BALANCE, lower it only when BALANCE shrinks.
-    expect(leaves.length).toBeGreaterThan(73);
+    // Measured 84 with #30's two journey tables (74 at b2a6f3f, #82); raise
+    // it with BALANCE, lower it only when BALANCE shrinks.
+    expect(leaves.length).toBeGreaterThan(83);
   });
 
   it.each<[string, (b: Balance) => unknown, unknown]>([
@@ -113,6 +115,16 @@ describe('BALANCE', () => {
       'parent §4.2: journeys of 30 min, 2 h, 4 h, 8 h, 24 h',
       (b) => b.journeys.durationsMs,
       [1_800_000, 7_200_000, 14_400_000, 28_800_000, 86_400_000],
+    ],
+    [
+      'design §5 (#30): a repeat card pays 1, 2, 3, 5 and 10 Insight',
+      (b) => b.journeys.duplicateInsight,
+      [1, 2, 3, 5, 10],
+    ],
+    [
+      'design §5 (#30): a repeat card pays a quarter of its duration in Understanding',
+      (b) => b.journeys.duplicateUnderstandingMs,
+      [450_000, 1_800_000, 3_600_000, 7_200_000, 21_600_000],
     ],
     [
       'parent §4.2: 1 slot, upgradable to 3',
@@ -199,4 +211,22 @@ describe('BALANCE', () => {
     const missingRank: Balance['words']['rankBonus'] = fourRanks;
     expect([incomplete, missingRank]).toHaveLength(2);
   });
+
+  it('names the journey durations, the tutorial first', () => {
+    expect(JOURNEY_DURATION_IDS).toEqual(['tutorial', '2h', '4h', '8h', '24h']);
+  });
+
+  /** Every table indexed by journey duration, one test each. */
+  const JOURNEY_TABLES: readonly [string, (b: Balance) => readonly number[]][] =
+    [
+      ['durationsMs', (b) => b.journeys.durationsMs],
+      ['duplicateInsight', (b) => b.journeys.duplicateInsight],
+      ['duplicateUnderstandingMs', (b) => b.journeys.duplicateUnderstandingMs],
+    ];
+  for (const [name, table] of JOURNEY_TABLES)
+    it(`journeys.${name} has one entry per duration id`, () => {
+      // Two empty lists are equally long: pin the population first.
+      expect(JOURNEY_DURATION_IDS).toHaveLength(5);
+      expect(table(BALANCE)).toHaveLength(JOURNEY_DURATION_IDS.length);
+    });
 });
