@@ -52,6 +52,7 @@ describe('the package entry point', () => {
     'automationOpensAt',
     'automationUnlocked',
     'bestPayback',
+    'nextPurchaseTick',
     'rateGain',
     'encounterPrice',
   ] as const)

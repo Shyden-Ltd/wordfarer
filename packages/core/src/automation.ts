@@ -10,9 +10,16 @@
  * soonest: the lowest cost / Δrate, ties by id in code-unit order.
  */
 import { BALANCE } from './balance';
+import { nextGridTick, simMs, type SimMs } from './clock';
 import type { CourseData, Encounter } from './course';
 import { Num } from './num';
-import { rateGain, understandingNow } from './production';
+import {
+  rateGain,
+  rateMsShort,
+  segments,
+  understandingAfter,
+  understandingNow,
+} from './production';
 import { regionsReached, route } from './route';
 import type { GameState } from './state';
 import { encounterPrice, upgradeLevel } from './upgrades';
@@ -80,4 +87,118 @@ export function bestPayback(
     }
   }
   return best?.encounter.id;
+}
+
+/** Grid ticks `first`, `first + every`, ..., none after `last`. */
+export interface TickGrid {
+  readonly first: number;
+  /** The latest a tick may fall; it need not be on the grid. */
+  readonly last: number;
+  readonly every: number;
+}
+
+/** The first tick found, if any, and how many ticks were tested. */
+export interface Found {
+  readonly tick: number | undefined;
+  readonly checks: number;
+}
+
+/**
+ * The first tick of `grid` at which `holds` is true, for a test that is
+ * false and then true along the grid. It starts from `guess` snapped up to
+ * the grid, steps back while the tick before also holds, and otherwise
+ * steps on until one does, so an exact guess costs two tests, that tick and
+ * the one before (AC3), and a wrong one still gives the scan's answer.
+ */
+export function firstHolding(
+  grid: TickGrid,
+  guess: number,
+  holds: (tick: number) => boolean,
+): Found {
+  if (Number.isNaN(guess)) {
+    throw new RangeError('firstHolding: the guess must not be NaN');
+  }
+  const { first, every } = grid;
+  // The last tick on the grid at or before `grid.last`.
+  const last = first + Math.floor((grid.last - first) / every) * every;
+  let checks = 0;
+  const test = (tick: number): boolean => {
+    checks += 1;
+    return holds(tick);
+  };
+  const snapped = first + Math.ceil((guess - first) / every) * every;
+  let tick = Math.min(Math.max(snapped, first), last + every);
+  let back = false;
+  while (tick - every >= first && test(tick - every)) {
+    tick -= every;
+    back = true;
+  }
+  if (back) return { tick, checks };
+  while (tick <= last && !test(tick)) tick += every;
+  return { tick: tick <= last ? tick : undefined, checks };
+}
+
+/**
+ * Pemandu's next purchase: the first tick of its grid in `(anchor, until]`
+ * at which Understanding pays for the cheapest unit of the regions reached
+ * (design §2.2 item 5). It walks the segments `understandingNow` walks from
+ * the anchor, adding in the same order, so the Understanding it tests at a
+ * tick is the bits `understandingNow` gives there. In each segment the rate
+ * is constant, so the tick is solved from it and confirmed by
+ * `firstHolding`; the answer never depends on how far `until` reaches.
+ */
+export function nextPurchaseTick(
+  course: CourseData,
+  state: GameState,
+  until: SimMs,
+): { readonly tick: SimMs | undefined; readonly checks: number } {
+  const prices = course.regions
+    .slice(0, regionsReached(course, state))
+    .flatMap((region) => region.encounters)
+    .map((encounter) => encounterPrice(state, encounter, 1));
+  const cheapest = prices.reduce<Num | undefined>(
+    (low, p) => (low === undefined || Num.cmp(p, low) < 0 ? p : low),
+    undefined,
+  );
+  if (cheapest === undefined) return { tick: undefined, checks: 0 };
+  const every = state.automation.intervalMs;
+  const from = state.anchor.sim;
+  const anchor = Num.fromTuple(state.anchor.understanding);
+  let total = Num.from(0);
+  let checks = 0;
+  // `until + 1` makes `until` itself a tick of the last segment, cut exactly
+  // where `understandingNow` at `until` would cut it.
+  for (const { start, end, rate } of segments(
+    course,
+    state,
+    from,
+    simMs(until + 1),
+  )) {
+    const before = total;
+    const at = (tick: number): Num =>
+      understandingAfter(
+        anchor,
+        Num.add(before, Num.mul(rate, Num.from(tick - start))),
+      );
+    const short = rateMsShort(anchor, before, cheapest);
+    const guess =
+      Num.cmp(short, Num.from(0)) <= 0
+        ? -Infinity
+        : rate.mantissa === 0
+          ? Infinity
+          : start + Num.toNumber(Num.div(short, rate));
+    const found = firstHolding(
+      {
+        first: nextGridTick(start === from ? from : simMs(start - 1), every),
+        last: end - 1,
+        every,
+      },
+      guess,
+      (tick) => Num.cmp(cheapest, at(tick)) <= 0,
+    );
+    checks += found.checks;
+    if (found.tick !== undefined) return { tick: simMs(found.tick), checks };
+    total = Num.add(total, Num.mul(rate, Num.from(end - start)));
+  }
+  return { tick: undefined, checks };
 }

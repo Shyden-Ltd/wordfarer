@@ -91,6 +91,7 @@ export {
   automationOpensAt,
   automationUnlocked,
   bestPayback,
+  nextPurchaseTick,
 } from './automation';
 export { pickUpCost, pickUpPool } from './words';
 export {

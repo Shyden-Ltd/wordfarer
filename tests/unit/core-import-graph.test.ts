@@ -457,13 +457,13 @@ describe('packages/core/src holds no value-import cycle', () => {
   });
 
   it('judges every relative import and export declaration (liveness)', () => {
-    // Measured 107 declarations with Pemandu's choice (#33; 97 on develop d4b1f94, #92), type-only ones included.
-    expect(coreGraph().declarations).toBeGreaterThan(106);
+    // Measured 108 declarations with Pemandu's tick (#33; 97 on develop d4b1f94, #92), type-only ones included.
+    expect(coreGraph().declarations).toBeGreaterThan(107);
   });
 
   it('draws an edge for every module a value is imported from (liveness)', () => {
-    // Measured 86 edges with Pemandu's choice (#33; 77 on develop d4b1f94, #92): the population the cycle check judges.
-    expect(edgeCount(coreGraph())).toBeGreaterThan(85);
+    // Measured 87 edges with Pemandu's tick (#33; 77 on develop d4b1f94, #92): the population the cycle check judges.
+    expect(edgeCount(coreGraph())).toBeGreaterThan(86);
   });
 
   it('reads each module’s relative imports as its raw text counts them', () => {

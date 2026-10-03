@@ -257,30 +257,48 @@ export function rateAt(course: CourseData, state: GameState, t: SimMs): Num {
 
 /** Understanding at the state's simulated time: the anchor's, plus production since. */
 export function understandingNow(course: CourseData, state: GameState): Num {
-  return Num.add(
+  return understandingAfter(
     Num.fromTuple(state.anchor.understanding),
-    producedBetween(course, state, state.anchor.sim, state.sim),
+    rateMs(course, state, state.anchor.sim, state.sim),
   );
 }
 
 /**
- * Understanding produced over `[from, to)`, bucket by bucket, each bucket
- * split at a held festival card's window edges.
+ * Understanding `total` rate-milliseconds past `anchor`: the one way every
+ * walk from an anchor, `understandingNow`'s and Pemandu's, turns what it
+ * added up into Understanding, so both reach the same bits (#33).
  */
-export function producedBetween(
+export function understandingAfter(anchor: Num, total: Num): Num {
+  return Num.add(anchor, Num.div(total, THOUSAND));
+}
+
+/**
+ * The rate-milliseconds still to add to `total` for Understanding walked
+ * from `anchor` to reach `target`; zero or less when it already has.
+ */
+export function rateMsShort(anchor: Num, total: Num, target: Num): Num {
+  return Num.sub(Num.mul(Num.sub(target, anchor), THOUSAND), total);
+}
+
+/** A stretch of simulated time, `[start, end)`, paid at one rate per second. */
+export interface Segment {
+  readonly start: SimMs;
+  readonly end: SimMs;
+  readonly rate: Num;
+}
+
+/**
+ * `[from, to)` cut at each hour bucket's end and at each held festival
+ * card's window edge, in order, with the rate paid over each piece.
+ */
+export function* segments(
   course: CourseData,
   state: GameState,
   from: SimMs,
   to: SimMs,
-): Num {
-  if (to < from) {
-    throw new RangeError(
-      `producedBetween: ${String(to)} is before ${String(from)}`,
-    );
-  }
+): Generator<Segment, void, undefined> {
   const skew = state.wall - state.sim;
   const held = heldCards(course, state);
-  let total = Num.from(0);
   for (let t = from; t < to;) {
     const edge = nextFestivalEdge(held, t + skew);
     const end = simMs(
@@ -297,11 +315,39 @@ export function producedBetween(
         `producedBetween: the segment from ${String(t)} ends at ${String(end)}`,
       );
     }
-    total = Num.add(
-      total,
-      Num.mul(rateAt(course, state, t), Num.from(end - t)),
-    );
+    yield { start: t, end, rate: rateAt(course, state, t) };
     t = end;
   }
-  return Num.div(total, THOUSAND);
+}
+
+/** Rate-milliseconds over `[from, to)`: each segment's rate times its length, added in order. */
+function rateMs(
+  course: CourseData,
+  state: GameState,
+  from: SimMs,
+  to: SimMs,
+): Num {
+  if (to < from) {
+    throw new RangeError(
+      `producedBetween: ${String(to)} is before ${String(from)}`,
+    );
+  }
+  let total = Num.from(0);
+  for (const { start, end, rate } of segments(course, state, from, to)) {
+    total = Num.add(total, Num.mul(rate, Num.from(end - start)));
+  }
+  return total;
+}
+
+/**
+ * Understanding produced over `[from, to)`, bucket by bucket, each bucket
+ * split at a held festival card's window edges.
+ */
+export function producedBetween(
+  course: CourseData,
+  state: GameState,
+  from: SimMs,
+  to: SimMs,
+): Num {
+  return Num.div(rateMs(course, state, from, to), THOUSAND);
 }
