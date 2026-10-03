@@ -715,10 +715,6 @@ const BURN_DOWN: readonly string[] = [
   'packages/core/test/automation.test.ts :: rateGain (AC2) :: at -> at -> initialState (../src/state)',
   'packages/core/test/pemandu-perf.test.ts :: (module) :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
   'packages/core/test/pemandu-perf.test.ts :: the bucket memo behind a fast return :: syntheticCourse -> syntheticCourse (../fixtures/synthetic-course)',
-  'packages/core/test/sail.test.ts :: the preview (AC2, DN3) :: at -> at -> initialState (../src/state)',
-  'packages/core/test/sail.test.ts :: a sail resets only Encounters and Understanding (AC3, DN3) :: at -> at -> initialState (../src/state)',
-  'packages/core/test/sail.test.ts :: a sail resets only Encounters and Understanding (AC3, DN3) :: tuple -> tuple -> Num (../src/num)',
-  'packages/core/test/sail.test.ts :: a sail resets only Encounters and Understanding (AC3, DN3) :: startJourney -> startJourney (../src/journeys)',
 ];
 
 const TEST_FILE = /\.(test|spec)\.ts$/;
@@ -771,8 +767,8 @@ describe('the suite', () => {
   });
 
   it('judges the calls they evaluate at collection, counted as calls', () => {
-    // Measured 285 after #97 moved grammar.test.ts's table states into its tests. Lower it only in the commit that moves calls out of collection.
-    expect(scan().judged).toBeGreaterThan(284);
+    // Measured 278 after #97 moved sail.test.ts's fixture states into its tests. Lower it only in the commit that moves calls out of collection.
+    expect(scan().judged).toBeGreaterThan(277);
   });
 
   it('reads a describe callback in every file whose text holds a describe call', () => {
