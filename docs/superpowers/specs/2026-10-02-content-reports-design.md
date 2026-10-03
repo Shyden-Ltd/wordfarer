@@ -104,7 +104,7 @@ CREATE TABLE content_report_quota (
 
 - `GET /v1/staff/content-reports`: open reports, oldest first, grouped by `(course, kind, itemId)`.
 - `POST /v1/staff/content-reports/:id/resolve` with `{outcome: 'accepted'|'dismissed', reason}`: deletes the row.
-- Both require the operator token, a Worker secret, until M5's staff roles (parent §11) replace it. Without it: 401 and nothing changes.
+- Both sit behind Cloudflare Access, as every staff route does (parent §11; operator, 2026-10-03). The Worker verifies the Access JWT (signature against the team's JWKS, `aud`, expiry) on every request. Without a valid one: 401 and nothing changes. A person reaches them through Access SSO; a machine client (the daily count) uses an Access service token.
 - `GET /v1/content-reports/health`: 200 when D1 answers.
 
 ## C. Triage and corrections (#53, review tool)
@@ -113,7 +113,7 @@ CREATE TABLE content_report_quota (
 2. **Accept** writes the suggestion into the content JSON, appends `{by: 'player-report:<id>', change}` to the item's history, and resolves the report as accepted. **Edit** opens the item editor with the report alongside. **Dismiss** needs a reason.
 3. Changes land in the working tree only, for a normal branch and PR, and ship in the next content update. The tool never pushes.
 4. An accepted correction does **not** make an item `native-reviewed`.
-5. **Daily count**, as shyden.co.uk #349: a scheduled workflow reads the open count through the operator API and, when it is above 0, posts one comment on a single open issue assigned to the operator (`1 content report is waiting.` or `<n> content reports are waiting.`), at most once per UTC day. The comment carries the count only, because the repository is public. The workflow reads the operator token from a branch-restricted GitHub environment, never a repository secret, because a public repository runs workflows for fork pull requests.
+5. **Daily count**, as shyden.co.uk #349: a scheduled workflow reads the open count through the staff API with an Access service token and, when it is above 0, posts one comment on a single open issue assigned to the operator (`1 content report is waiting.` or `<n> content reports are waiting.`), at most once per UTC day. The comment carries the count only, because the repository is public. The workflow reads the operator token from a branch-restricted GitHub environment, never a repository secret, because a public repository runs workflows for fork pull requests.
 
 ## D. In-game reporting (#54, M3)
 
@@ -150,3 +150,4 @@ Each pass runs the mechanical checks (every story number and parent-spec section
 - **Pass 5** (2026-10-02): one finding, fixed. B.2 stated as fact that the D1 batch "rolls back as a whole", the claim the Assumptions list marks unmeasured (pass 2's finding 5 again, in new words); it now says what Cloudflare documents and that #52 measures it. §E's Worker tests now include the duplicate-leaves-quota case that #52's AC3 already asks for.
 - **Pass 6** (2026-10-02): mechanical checks run by script, not by eye: every `#N` in the body above this log is an open Wordfarer story (#51–#54) or shyden.co.uk's own #97 and #349, cited as theirs; parent §5.2, §5.3, §5.4, §5.5, §6.6, §10.7, §11, §13 and §15 each exist once; the parent carries the evidence sentence, the Reports view, the new gate, the disclosure line (3 places), the D18 risk row and 8 D18 mentions; `CLAUDE.md` carries the two-source rule. One finding, in this log: pass 3 said it checked #7 and #17, which this document never cites (they are the stories' epics); recorded here rather than rewriting pass 3.
 - **Pass 7** (2026-10-02): zero findings. The script re-run gives the same references (#51–#54, shyden.co.uk #97 and #349; parent §5.2, §5.3, §5.4, §6.6, §10.7, §11, plus §5.5 and §13 in §1), all present; the whole log re-read against the runs it describes. Self-approved.
+- **Amendment** (2026-10-03): the operator chose Cloudflare Access for staff authentication, asked interactively, replacing the operator token in section B; the daily count now authenticates with an Access service token.
